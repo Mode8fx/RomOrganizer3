@@ -1,6 +1,7 @@
 import sys
 import os
 from os import path, mkdir, listdir, rmdir
+from getpass import getpass as inputHidden
 
 ##############
 # USER INPUT #
@@ -606,6 +607,40 @@ def printTitle(string, topBottomChar="#", sideChar="#", cornerChar="#"):
 	print(topBottom)
 	print(sideChar+" "+string+" "+sideChar)
 	print(topBottom)
+
+"""
+	Returns the base string with either the singular or plural suffix depending on the value of num.
+
+	Parameters
+	----------
+	base : str
+		The base of the word.
+	num : int
+		The quantity of the desired word.
+	singularSuffix : str
+		The suffix of the word's singular form
+	pluralSuffix : str
+		The suffix of the word's plural form
+
+	Returns
+	-------
+	str
+		The resulting string
+
+	Examples
+	--------
+	Input 1
+		pluralize("ind", 1, "ex", "ices")
+	Output 1
+		"index"
+	Input 2
+		pluralize("ind", 2, "ex", "ices")
+	Output 2
+		"indices"
+
+"""
+def pluralize(base, num, singularSuffix="", pluralSuffix="s"):
+	return base+singularSuffix if num == 1 else base+pluralSuffix
 
 """
 SOURCES

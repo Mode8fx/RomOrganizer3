@@ -28,37 +28,47 @@ except:
 crcHasher = FileHash('crc32')
 
 def main():
-	initScreen()
-	selectDeviceProfile()
-
-	initScreen()
-	choice = makeChoice("Select an option.", ["Update/audit main romsets", "Export romset", "Help"])
-	print()
-	if choice == 1:
-		updateAndAuditMainRomsets()
-	elif choice == 2:
-		exportRomset()
-	else:
-		printHelp()
+	createDir(logFolder)
+	while True:
+		initScreen()
+		choice = makeChoice("Select an option.", ["Update/audit main romsets", "Create new device profile", "Export romset", "Help", "Exit"])
+		print()
+		if choice == 1:
+			updateAndAuditMainRomsets()
+		elif choice == 2:
+			createDeviceProfile()
+		elif choice == 3:
+			exportRomsets()
+		elif choice == 4:
+			printHelp()
+		else:
+			clearScreen()
+			sys.exit()
 
 def selectDeviceProfile():
 	deviceProfiles = listdir(profilesFolder)
 	if len(deviceProfiles) > 0:
-		dp = makeChoice("\nSelect a device profile (which device are you copying to?)", [path.splitext(prof)[0] for prof in deviceProfiles]+["Create new profile"])
+		dp = makeChoice("\nSelect a device profile (which device are you copying to?)", [path.splitext(prof)[0] for prof in deviceProfiles]+["Create new profile", "Back to menu"])
 		if dp == len(deviceProfiles)+1:
 			createDeviceProfile()
+			return False
+		elif dp == len(deviceProfiles)+2:
+			return False
 		else:
 			dn = deviceProfiles[dp-1]
 			deviceProfile = path.join(profilesFolder, dn)
 			deviceName = path.splitext(dn)[0]
+			return True
 	else:
-		print("\nNo device profiles found. Please follow these steps to create a new profile.")
-		createDeviceProfile()
+		print("\nNo device profiles found. Please create a new one.")
+		inputHidden("Press Enter to continue.")
+		return False
 
 def createDeviceProfile():
 	global deviceName
 	global deviceProfile
 
+	print("\nFollow these steps to create a new device profile.")
 	deviceName = ""
 	while deviceName == "":
 		print("\n(1/5) What would you like to name this profile?")
@@ -131,11 +141,19 @@ def createDeviceProfile():
 			dpFile.writelines(currChoice+"\n")
 	dpFile.close()
 	print("\nDevice Profile saved as "+deviceProfile+".")
-	sleep(2)
+	sleep(1)
+	inputHidden("Press Enter to continue.")
 
 def updateAndAuditMainRomsets():
-	for currSystemName in listdir(romsetFolder):
-		currSystemFolder = path.join(romsetFolder, currSystemName)
+	currRomsetFolder = askForDirectory("Select the ROM directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
+	sleep(1)
+	if currRomsetFolder == "":
+		print("Action cancelled.")
+		sleep(1)
+		return
+	for currSystemName in listdir(currRomsetFolder):
+		print("\n"+currSystemName)
+		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
 			continue
 		currSystemXML = path.join(noIntroDir, currSystemName+".dat")
@@ -145,31 +163,87 @@ def updateAndAuditMainRomsets():
 		tree = ET.parse(currSystemXML)
 		root = tree.getroot()
 		allGameFields = root[1:]
+		allGameNamesInXML = {}
+		for game in allGameFields:
+			allGameNamesInXML[game.get("name")] = False
+		romsWithoutCRC = []
 		for file in listdir(currSystemFolder):
-			currFile = path.join(currSystemFolder, file)
-			if not path.isfile(currFile):
+			finalState = 0 # 0 = 
+			currFilePath = path.join(currSystemFolder, file)
+			currFileName = path.splitext(file)[0]
+			if not path.isfile(currFilePath):
 				continue
-			if zipfile.is_zipfile(currFile):
-				with zipfile.ZipFile(currFile, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
+			if zipfile.is_zipfile(currFilePath):
+				with zipfile.ZipFile(currFilePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
 					if len(zippedFile.namelist()) > 1:
 						print("\n"+file+" archive contains more than one file. Skipping.")
 						continue
 					fileInfo = zippedFile.infolist()[0]
 					# currZippedFile = fileInfo.filename
-					currFileCRC = format(fileInfo.CRC & 0xFFFFFFFF, '08x') # crc32
+					currFileCRC = format(fileInfo.CRC & 0xFFFFFFFF, '08x').upper() # crc32
 			else:
 				# currZippedFile = None
-				currFileCRC = crcHasher.hash_file(currFile)
+				currFileCRC = crcHasher.hash_file(currFilePath).upper()
+			foundMatch = False
 			for game in allGameFields:
-				currDBGameCRC = game.find("rom").get("crc")
+				currDBGameCRC = game.find("rom").get("crc").upper()
 				if currDBGameCRC == currFileCRC:
 					currDBGameName = game.find("description").text
-					if path.splitext(path.basename(currFile))[0] != currDBGameName:
-						if zipfile.is_zipfile(currFile):
-							renameArchiveAndContent(currFile, currDBGameName)
+					allGameNamesInXML[currDBGameName] = True
+					if currFileName != currDBGameName:
+						currFileExt = path.splitext(currFilePath)[1]
+						if path.exists(path.join(currSystemFolder, currDBGameName+currFileExt)): # two of the same file (with different names) exist
+							i = 1
+							while True:
+								incrementedGameName = currDBGameName+" (copy) ("+str(i)+")"
+								if not path.exists(path.join(currSystemFolder, incrementedGameName+currFileExt)):
+									break
+								i += 1
+							currDBGameName = incrementedGameName
+						if zipfile.is_zipfile(currFilePath):
+							renameArchiveAndContent(currFilePath, currDBGameName)
 						else:
-							rename(currFile, path.join(currSystemFolder, currDBGameName+path.splitext(currFile)[1]))
-							print("Renamed "+path.splitext(path.basename(currFile))[0]+" to "+currDBGameName+"\n")
+							rename(currFilePath, path.join(currSystemFolder, currDBGameName+currFileExt))
+							print("Renamed "+currFileName+" to "+currDBGameName+"\n")
+					foundMatch = True
+					break
+			if not foundMatch:
+				romsWithoutCRC.append(currFileName+" ("+file+")")
+		xmlRomsInSet = [key for key in allGameNamesInXML.keys() if allGameNamesInXML[key] == True]
+		xmlRomsNotInSet = [key for key in allGameNamesInXML.keys() if allGameNamesInXML[key] == False]
+		createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName)
+
+	inputHidden("\nDone. Press Enter to continue.")
+
+def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName):
+	xmlRomsInSet.sort()
+	xmlRomsNotInSet.sort()
+	romsWithoutCRC.sort()
+
+	numOverlap = len(xmlRomsInSet)
+	numNotInSet = len(xmlRomsNotInSet)
+	numNoCRC = len(romsWithoutCRC)
+	auditLogFile = open(path.join(logFolder, "Audit ("+currSystemName+") ["+str(numOverlap)+" out of "+str(numOverlap+numNotInSet)+"].txt"), "w", encoding="utf-8", errors="replace")
+	auditLogFile.writelines("=== "+currSystemName+" ===\n")
+	auditLogFile.writelines("=== This romset contains "+str(numOverlap)+" of "+str(numOverlap+numNotInSet)+" known ROMs ===\n\n")
+	if numOverlap > 0:
+		auditLogFile.writelines("= CONTAINS =\n")
+		for rom in xmlRomsInSet:
+			auditLogFile.writelines(rom+"\n")
+	if numNotInSet > 0:
+		auditLogFile.writelines("\n= MISSING =\n")
+		for rom in xmlRomsNotInSet:
+			auditLogFile.writelines(rom+"\n")
+	if numNoCRC > 0:
+		auditLogFile.writelines("\n=== This romset contains "+str(numNoCRC)+pluralize(" file", numNoCRC)+" with no known database match ===\n\n")
+		for rom in romsWithoutCRC:
+			auditLogFile.writelines(rom+"\n")
+	auditLogFile.close()
+
+def exportRomsets():
+	initScreen()
+	if not selectDeviceProfile():
+		return
 
 def renameArchiveAndContent(currArchivePath, newName):
 	with zipfile.ZipFile(currArchivePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
@@ -189,6 +263,18 @@ def renameArchiveAndContent(currArchivePath, newName):
 		newZip.write(newExtractedFilePath, arcname='\\'+newName+fileExt)
 	remove(newExtractedFilePath)
 	print("Renamed "+path.splitext(path.basename(currArchivePath))[0]+" to "+newName+"\n")
+
+def askForDirectory(string):
+	print("\n"+string)
+	sleep(0.5)
+	root = Tk()
+	root.withdraw()
+	outputFolder = filedialog.askdirectory()
+	if outputFolder != "":
+		isCorrect = makeChoice("Are you sure this is the correct folder?\n"+outputFolder, ["Yes", "No"])
+		if isCorrect == 2:
+			outputFolder = ""
+	return outputFolder
 
 def initScreen():
 	clearScreen()
@@ -211,6 +297,16 @@ def printHelp():
 	print("  are not re-exported.")
 	print("- May also export contents of secondary folder, according to current device")
 	print("  profile.")
+	print("\nCreate new device profile")
+	print("- Create a new device profile. This is a text file that indicates the following:")
+	print("  - Which systems from your rom collection should be copied")
+	print("  - Whether each system should include all roms (Full), one rom per game (1G1R),")
+	print("    or one rom per game while ignoring games that don't have a version from your")
+	print("    primary region(s) (1G1R Primary)")
+	print("  - Primary region(s); these folders will not be created in romset organization;")
+	print("    instead, their contents are added to the root folder of the current system.")
+	print("  - Which folders, if any, exist in your device's rom folder that you do not")
+	print("    want to copy back to the main folder.")
 	inputHidden("\nPress Enter to continue.")
 
 if __name__ == '__main__':
