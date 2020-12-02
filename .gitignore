@@ -126,3 +126,4 @@ dmypy.json
 *.bat
 Romset Profiles/
 No-Intro Database/
+Logs/

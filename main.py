@@ -22,7 +22,7 @@ except:
 	from settingsRebuilder import *
 	rebuildSettingsFile()
 	print("Created new settings file as settings.py. Edit settings.py with your own directories.")
-	input("Press Enter to exit.")
+	inputHidden("Press Enter to exit.")
 	sys.exit()
 
 crcHasher = FileHash('crc32')
@@ -212,6 +212,11 @@ def updateAndAuditMainRomsets():
 		xmlRomsInSet = [key for key in allGameNamesInXML.keys() if allGameNamesInXML[key] == True]
 		xmlRomsNotInSet = [key for key in allGameNamesInXML.keys() if allGameNamesInXML[key] == False]
 		createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName)
+		numNoCRC = len(romsWithoutCRC)
+		if numNoCRC > 0:
+			print("Warning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
+			print(pluralize("", numNoCRC, "This file", "These files")+" will be ignored when exporting this system's romset to another")
+			print("device.")
 
 	inputHidden("\nDone. Press Enter to continue.")
 
