@@ -124,6 +124,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 *.bat
-Romset Profiles/
+Device Profiles/
 No-Intro Database/
 Logs/
