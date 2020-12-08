@@ -12,20 +12,12 @@ from tkinter import *
 from gatelib import *
 from filehash import FileHash
 import configparser
-
-"""
-TODO:
-
-- Some attributes are staying in best game name when they shouldn't (should probably port over the old attribute system)
-- Detects way too many duplicate names (might be an extension of the previous issue)
-"""
+from dateutil.parser import parse as dateParse
 
 progFolder = getCurrFolder()
 sys.path.append(progFolder)
 crcHasher = FileHash('crc32')
 
-mainConfig = configparser.ConfigParser(allow_no_value=True)
-mainConfig.optionxform = str
 mainConfigFile = path.join(progFolder, "settings.ini")
 
 updateFromDeviceFolder = path.join(progFolder, "Copied From Device")
@@ -42,7 +34,7 @@ categoryValues = {
 	"Coverdiscs" : 4
 }
 
-hiddenKeywords = ["Rev", "Disc", "Beta", "Demo", "Sample"]
+hiddenKeywords = ["Rev", "Disc", "Beta", "Demo", "Sample", "Proto", "Alt", "Earlier", "Download Station"]
 
 ########
 # MAIN #
@@ -205,15 +197,16 @@ def renameArchiveAndContent(currArchivePath, newName):
 def prepareMainConfig():
 	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs
 	# global regions, specialFolders, specialAttributes, ignoredFolders, primaryRegions, doNotCopyFromDevice
-	if path.exists(mainConfigFile):
-		mainConfig.read(mainConfigFile)
-	else:
+	if not path.exists(mainConfigFile):
 		createMainConfig()
+	mainConfig = configparser.ConfigParser(allow_no_value=True)
+	mainConfig.optionxform = str
+	mainConfig.read(mainConfigFile)
 	mainRomFolder = mainConfig["ROM Folders"]["Main ROM Folder"]
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
 	# regions = [key for key in mainConfig["Regions"]]
 	# specialFolders = mainConfig["Special Folders"].split("|")
-	# specialAttributes = hiddenKeywords + mainConfig["Special ROM Attributes"]["Keywords"].split("|") + mainConfig["Special ROM Attributes"]["Sources"].split("|")
+	# specialAttributes = hiddenKeywords + mainConfig["Special ROM Attributes (Advanced)"]["Keywords"].split("|") + mainConfig["Special ROM Attributes (Advanced)"]["Sources"].split("|")
 	# ignoredFolders = deviceConfig["Special Categories"]["Ignored Folders"].split("|")
 	# primaryRegions = deviceConfig["Special Categories"]["Primary Regions"].split("|")
 	# doNotCopyFromDevice = deviceConfig["Special Categories"]["Do Not Copy From Device"].split("|")
@@ -228,6 +221,8 @@ def prepareMainConfig():
 
 def createMainConfig():
 	global mainConfig
+	mainConfig = configparser.ConfigParser(allow_no_value=True)
+	mainConfig.optionxform = str
 	# ROM Folders
 	mainConfig["ROM Folders"] = {}
 	mainConfig.set('ROM Folders', '# The directory of the main ROM folder you want to export from, which contains system folders that contain No-Intro verified ROMs. If you leave this blank, the program will ask for this folder when you try to export romsets.')
@@ -239,8 +234,8 @@ def createMainConfig():
 	mainConfig.set('Regions', '# The region folder for each ROM is determined by its region/language tag as listed below.')
 	mainConfig.set('Regions', '# For example, any ROM with (World), (USA), or (U) in its name will be exported to a [USA] folder')
 	mainConfig.set('Regions', '# Additionally, you may set at least one region as primary (see device profiles). Primary regions do not have a subfolder, and are instead exported to the system\'s root folder.')
-	mainConfig.set('Regions', '# Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and En tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe tag above the USA tag.')
-	mainConfig.set('Regions', '# Finally, the folder with :DEFAULT: (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions.')
+	mainConfig.set('Regions', '# Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and Fr tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe category above the USA category. You may also create your own region categories.')
+	mainConfig.set('Regions', '# Finally, the category with :DEFAULT: (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions. Keep it as the last possible region tag.')
 	mainConfig["Regions"]["Test Program"] = "|".join([
 		"Test Program"
 		])
@@ -256,7 +251,12 @@ def createMainConfig():
 	mainConfig["Regions"]["Japan"] = "|".join([
 		"J", "Japan", "Ja"
 		])
-	mainConfig["Regions"]["Other (non-English)"] = ":DEFAULT:"
+	mainConfig["Regions"]["Other (non-English)"] = "|".join([
+		"F", "France", "Fr", "G", "Germany", "De", "S", "Spain", "Es", "I", "Italy",
+		"It", "No", "Norway", "Br", "Brazil", "Sw", "Sweden", "Cn", "China", "Zh", "K",
+		"Korea", "Ko", "As", "Asia", "Ne", "Netherlands", "Ru", "Russia", "Da",
+		"Denmark", "Nl", "Pt", "Sv", "No", "Da", "Fi", "Pl", ":DEFAULT:"
+	])
 	# Special Folders
 	mainConfig["Special Folders"] = {}
 	mainConfig.set('Special Folders', '# Special Folders are folders that are created on your device upon export for verified ROMs with filesnames that start with certain strings.')
@@ -280,21 +280,22 @@ def createMainConfig():
 		"[BIOS]"
 		])
 	# Special ROM Attributes
-	mainConfig["Special ROM Attributes"] = {}
-	mainConfig.set('Special ROM Attributes', '# (Advanced) Special ROM Attributes are substrings in verified ROM names (specifically, the parentheses fields in these names) that are ignored when trying to determine the best name for a game.')
-	mainConfig.set('Special ROM Attributes', '#            \"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).')
-	mainConfig["Special ROM Attributes"]["Keywords"] = "|".join([
-		"Proto", "Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
-		"Promo", "DLC", "WiiWare", "Minis", "Club Nintendo", "Aftermarket",
-		"Test Program", "Competition Cart", "NES Test", "Promotion Card", "Program"
+	mainConfig["Special ROM Attributes (Advanced)"] = {}
+	mainConfig.set('Special ROM Attributes (Advanced)', '# Special ROM Attributes are substrings in verified ROM names (specifically, the parentheses fields in these names) that are ignored when trying to determine the best name for a game.')
+	mainConfig.set('Special ROM Attributes (Advanced)', '# \"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).')
+	mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
+		"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
+		"Club Nintendo", "Aftermarket", "Test Program", "Competition Cart",
+		"NES Test", "Promotion Card", "Program", "Manual"
 		])
-	mainConfig["Special ROM Attributes"]["Sources"] = "|".join([
+	mainConfig["Special ROM Attributes (Advanced)"]["Sources"] = "|".join([
 		"Virtual Console", "Switch Online", "GameCube", "Namcot Collection",
-		"Namco Museum Archives"
+		"Namco Museum Archives", "Kiosk", "iQue", "Sega Channel", "WiiWare",
+		"DLC", "Minis", "Promo", "Nintendo Channel", "Nintendo Channel, Alt",
+		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn"
 		])
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
-	mainConfig.read(mainConfigFile)
 	print("Created new settings.ini")
 	inputHidden("Press Enter to continue.")
 
@@ -464,7 +465,7 @@ def exportRomsets():
 	if not selectDeviceProfile():
 		return
 
-	currProfileMainDirs = [system for system in list(deviceConfig["Main Romsets"].keys()) if deviceConfig["Main Romsets"][system] in ["Full", "1G1R", "1G1R Primary"]]
+	currProfileMainDirs = [system for system in list(deviceConfig["Main Romsets"].keys()) if deviceConfig["Main Romsets"][system] in ("Full", "1G1R", "1G1R Primary")]
 	if len(currProfileMainDirs) == 0:
 		if len(mainSystemDirs) > 0:
 			print("The current profile does not allow any romsets.")
@@ -477,7 +478,7 @@ def exportRomsets():
 			systemChoices = list(range(1, len(currProfileMainDirs)+1))
 	if secondaryRomFolder != "":
 		secondaryFolderName = path.basename(secondaryRomFolder)
-		currProfileSecondaryDirs = [system for system in list(deviceConfig["Secondary Romsets"].keys()) if deviceConfig["Secondary Romsets"][system] in ["Full", "1G1R", "1G1R Primary"]]
+		currProfileSecondaryDirs = [system for system in list(deviceConfig["Secondary Romsets"].keys()) if deviceConfig["Secondary Romsets"][system] in ("Full", "1G1R", "1G1R Primary")]
 		if len(currProfileMainDirs) == 0:
 			if len(secondarySystemDirs) > 0:
 				print("The current profile does not allow any "+secondaryFolderName+" folders.")
@@ -506,6 +507,7 @@ def exportRomsets():
 
 def generateGameRomDict():
 	global gameRomDict
+	global newGameRomDict
 	gameRomDict = {}
 	systemFolder = path.join(mainRomFolder, systemName)
 	currSystemDAT = path.join(noIntroDir, systemName+".dat")
@@ -524,13 +526,16 @@ def generateGameRomDict():
 					addGameAndRomToDict(parent, romName)
 				break
 	# Rename gameRomDict keys according to best game name
+	newGameRomDict = {}
 	for game in gameRomDict.keys():
 		bestGameName = getBestGameName(gameRomDict[game])
-		if bestGameName in gameRomDict: # same name for two different games (Pokemon Stadium International vs. Japan)
-			bestGameName = fixDuplicateName(gameRomDict[bestGameName], gameRomDict[game], bestGameName)
-		gameRomDict[bestGameName] = gameRomDict.pop(game)
+		if bestGameName in newGameRomDict: # same name for two different games (Pokemon Stadium International vs. Japan)
+			bestGameName = fixDuplicateName(newGameRomDict[bestGameName], gameRomDict[game], bestGameName)
+		newGameRomDict[bestGameName] = gameRomDict[game]
+	gameRomDict = newGameRomDict
 	for game in sorted(gameRomDict.keys()):
-		print("    ", game, gameRomDict[game])
+		# print("    ", game, gameRomDict[game])
+		print(game)
 	inputHidden(" ")
 
 def addGameAndRomToDict(game, rom):
@@ -547,25 +552,28 @@ def getBestGameName(roms):
 		return bestGameName
 	attributes = atts[1:]
 	for att in attributes:
-		if keepAttribute(att):
+		keepAtt = keepAttribute(att)
+		if keepAtt:
 			bestGameName += " ("+att+")"
-		# if att in ["Beta", "Proto"]: # Ignore dates after Beta, etc.
-		# 	break
 	return bestGameName
 
 def keepAttribute(att):
-	for region in mainConfig["Regions"]:
-		if att in region:
-			return False
-	for specialCategory in mainConfig["Special ROM Attributes"]:
-		if att in specialCategory:
-			return False
 	for keyword in hiddenKeywords:
 		if att.startswith(keyword):
 			return False
 	if att.startswith("v") and len(att) > 1 and att[1].isdigit():
 		return False
-	return True
+	for region in mainConfig["Regions"]:
+		if att in mainConfig["Regions"][region]:
+			return False
+	for specialCategory in mainConfig["Special ROM Attributes (Advanced)"]:
+		if att in mainConfig["Special ROM Attributes (Advanced)"][specialCategory]:
+			return False
+	try:
+		dateParse(att, False)
+		return False
+	except:
+		return True
 
 def getBestRom(roms):
 	romsInBestRegion, _ = getRomsInBestRegion(roms)
@@ -607,7 +615,7 @@ def getScore(rom):
 	attributes = getAttributeSplit(rom)[1:]
 	score = 100
 	lastVersion = 0
-	sources = mainConfig["Special ROM Attributes"]["Sources"].split("|")
+	sources = mainConfig["Special ROM Attributes (Advanced)"]["Sources"].split("|")
 	for att in attributes:
 		if att.startswith("Rev"):
 			try:
@@ -651,15 +659,17 @@ def getAttributeSplit(name):
 	return mergeNameArray
 
 def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
-	global gameRomDict
+	global newGameRomDict
 	_, firstRegionNum = getRomsInBestRegion(firstGameRoms)
 	_, secondRegionNum = getRomsInBestRegion(secondGameRoms)
 	if firstRegionNum <= secondRegionNum:
 		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
+		# print("Renamed "+sharedName+" to "+newSecondGameName)
 		return newSecondGameName
 	else:
 		newFirstGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[firstRegionNum]+")"
-		gameRomDict[newFirstGameName] = gameRomDict.pop(sharedName)
+		newGameRomDict[newFirstGameName] = newGameRomDict.pop(sharedName)
+		# print("Renamed "+sharedName+" to "+newFirstGameName)
 		return sharedName
 
 def copyRomset(romsetCategory):
