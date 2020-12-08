@@ -292,7 +292,8 @@ def createMainConfig():
 		"Virtual Console", "Switch Online", "GameCube", "Namcot Collection",
 		"Namco Museum Archives", "Kiosk", "iQue", "Sega Channel", "WiiWare",
 		"DLC", "Minis", "Promo", "Nintendo Channel", "Nintendo Channel, Alt",
-		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn"
+		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn",
+		"Undumped Japanese Download Station"
 		])
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
@@ -377,7 +378,9 @@ def createDeviceProfile():
 	print("Use \"|\" as a divider.")
 	print("For example, to skip all roms that are either Japan or Compilation, type the following: Japan|Compilation")
 	print("According to your settings.ini file, possible Special Folders and Regions are:")
-	print(", ".join(["\""+entry+"\"" for entry in list(specialFolders.keys())+list(regions.keys())]))
+	specialFolders = [folder for folder in mainConfig["Special Folders"]]
+	regions = [region for region in mainConfig["Regions"]]
+	print(", ".join(["\""+entry+"\"" for entry in specialFolders+regions]))
 	currInput = input().strip()
 	currInputParsed = [val.strip() for val in currInput.split("|")]
 	deviceConfig["Special Categories"]["Ignored Folders"] = "|".join(currInputParsed)
@@ -387,7 +390,7 @@ def createDeviceProfile():
 	print("Use \"|\" as a divider.")
 	print("For example, if you wanted all USA and Europe roms in the root folder instead of [USA] and [Europe] subfolders, you would type the following: USA|Europe")
 	print("According to your settings.ini file, possible Regions are:")
-	print(", ".join(["\""+entry+"\"" for entry in list(regions.keys())]))
+	print(", ".join(["\""+entry+"\"" for entry in regions]))
 	currInput = input().strip()
 	currInputParsed = [val.strip() for val in currInput.split("|")]
 	deviceConfig["Special Categories"]["Primary Regions"] = "|".join(currInputParsed)
@@ -529,9 +532,17 @@ def generateGameRomDict():
 	newGameRomDict = {}
 	for game in gameRomDict.keys():
 		bestGameName = getBestGameName(gameRomDict[game])
+		mergeBoth = False
 		if bestGameName in newGameRomDict: # same name for two different games (Pokemon Stadium International vs. Japan)
-			bestGameName = fixDuplicateName(newGameRomDict[bestGameName], gameRomDict[game], bestGameName)
-		newGameRomDict[bestGameName] = gameRomDict[game]
+			originalBestGameName = bestGameName
+			bestGameName, mergeBoth = fixDuplicateName(newGameRomDict[bestGameName], gameRomDict[game], bestGameName)
+			if mergeBoth:
+				for rom in gameRomDict[game]:
+					newGameRomDict[originalBestGameName].append(rom)
+			else:
+				newGameRomDict[bestGameName] = gameRomDict[game]
+		else:
+			newGameRomDict[bestGameName] = gameRomDict[game]
 	gameRomDict = newGameRomDict
 	for game in sorted(gameRomDict.keys()):
 		# print("    ", game, gameRomDict[game])
@@ -660,17 +671,20 @@ def getAttributeSplit(name):
 
 def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 	global newGameRomDict
-	_, firstRegionNum = getRomsInBestRegion(firstGameRoms)
-	_, secondRegionNum = getRomsInBestRegion(secondGameRoms)
-	if firstRegionNum <= secondRegionNum:
+	firstBestRoms, firstRegionNum = getRomsInBestRegion(firstGameRoms)
+	secondBestRoms, secondRegionNum = getRomsInBestRegion(secondGameRoms)
+	if firstRegionNum < secondRegionNum:
 		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		# print("Renamed "+sharedName+" to "+newSecondGameName)
-		return newSecondGameName
-	else:
+		return newSecondGameName, False
+	elif firstRegionNum > secondRegionNum:
 		newFirstGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[firstRegionNum]+")"
 		newGameRomDict[newFirstGameName] = newGameRomDict.pop(sharedName)
 		# print("Renamed "+sharedName+" to "+newFirstGameName)
-		return sharedName
+		return sharedName, False
+	else: # rare, but possible; such as DS demos that have both a DS Download Station and a Nintendo Channel version
+		tempSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
+		return tempSecondGameName, True
 
 def copyRomset(romsetCategory):
 	"""
