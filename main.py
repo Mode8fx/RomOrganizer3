@@ -461,7 +461,7 @@ def verifyMainRomFolder():
 ##########
 
 def exportRomsets():
-	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, systemName
+	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, systemName, gameRomDict
 	initScreen()
 	if not verifyMainRomFolder():
 		return
@@ -506,7 +506,8 @@ def exportRomsets():
 			print("Skipping current system.")
 			continue
 		generateGameRomDict()
-		# TODO: Start from copyRomset()
+		copyRomset(romsetCategory)
+	inputHidden("Press Enter to continue.")
 
 def generateGameRomDict():
 	global gameRomDict
@@ -544,10 +545,10 @@ def generateGameRomDict():
 		else:
 			newGameRomDict[bestGameName] = gameRomDict[game]
 	gameRomDict = newGameRomDict
-	for game in sorted(gameRomDict.keys()):
-		# print("    ", game, gameRomDict[game])
-		print(game)
-	inputHidden(" ")
+	# for game in sorted(gameRomDict.keys()):
+	# 	# print("    ", game, gameRomDict[game])
+	# 	print(game)
+	# inputHidden(" ")
 
 def addGameAndRomToDict(game, rom):
 	global gameRomDict
@@ -723,28 +724,36 @@ def initScreen():
 def printHelp():
 	clearScreen()
 	print("\nUpdate/audit romsets")
-	print("- Updates the names of misnamed roms (and the ZIP files containing them, if")
-	print("  applicable) according to the rom's entry in the No-Intro Parent/Clone DAT.")
-	print("  This is determined by the rom's matching hash code in the DAT.")
-	print("- For each system, creates a log file indicating which roms exist in the romset,")
-	print("  which roms are missing, and which roms are in the set that don't match")
-	print("  anything form the DAT.")
-	print("\nExport roms")
-	print("- Exports romset according to current device profile. Either all systems or a")
-	print("  subset of systems may be chosen, and roms that already exist on the device")
-	print("  are not re-exported.")
-	print("- May also export contents of secondary folder, according to current device")
-	print("  profile.")
+	print(limitedString("Updates the names of misnamed roms (and the ZIP files containing them, if applicable) according to the rom's entry in the No-Intro Parent/Clone DAT. This is determined by the rom's matching hash code in the DAT, so the original name doesn't matter.",
+		80, "- ", "  "))
+	print(limitedString("For each system, creates a log file indicating which roms exist in the romset, which roms are missing, and which roms are in the set that don't match anything from the DAT.",
+		80, "- ", "  "))
 	print("\nCreate new device profile")
-	print("- Create a new device profile. This is a text file that indicates the following:")
-	print("  - Which systems from your rom collection should be copied")
-	print("  - Whether each system should include all roms (Full), one rom per game (1G1R),")
-	print("    or one rom per game while ignoring games that don't have a version from your")
-	print("    primary region(s) (1G1R Primary)")
-	print("  - Primary region(s); these folders will not be created in romset organization;")
-	print("    instead, their contents are added to the root folder of the current system.")
-	print("  - Which folders, if any, exist in your device's rom folder that you do not")
-	print("    want to copy back to the main folder.")
+	print(limitedString("Create a new device profile. This is a text file that indicates the following:",
+		80, "- ", "  "))
+	print(limitedString("Which systems from your rom collection should be copied",
+		80, "  - ", "    "))
+	print(limitedString("Whether each system should include all roms (Full), one rom per game (1G1R), or one rom per game while ignoring games that don't have a version from your primary region(s) (1G1R Primary)",
+		80, "  - ", "    "))
+	print(limitedString("Primary region(s); these folders will not be created in romset organization; instead, their contents are added to the root folder of the current system.",
+		80, "  - ", "    "))
+	print(limitedString("Which folders, if any, exist in your device's rom folder that you do not want to copy back to the main folder.",
+		80, "  - ", "    "))
+	print("\nSet main ROM folder")
+	print(limitedString("Allows you to set a main rom folder. This is the directory that contains system folders, which contain No-Intro verified ROMs.",
+		80, "- ", "  "))
+	print(limitedString("Example: MAINFOLDER/Sega Genesis/Sonic the Hedgehog (USA, Europe).zip",
+		80, "- ", "  "))
+	print("\nSet secondary ROM folder")
+	print(limitedString("(Optional) Allows you to set a secondary rom folder. This is a directory that contains system folders, which can contain unverified ROMS/other files (rom hacks, homebrew, etc).",
+		80, "- ", "  "))
+	print(limitedString("Example: SECONDARYFOLDER/Sega Genesis/[Hacks]/Sonic/Sonic 2 Delta.zip",
+		80, "- ", "  "))
+	print("\nExport roms")
+	print(limitedString("Exports romset according to current device profile. Either all systems or a subset of systems may be chosen, and roms that already exist on the device are not re-exported, allowing you to simply update a device with newly-added roms.",
+		80, "- ", "  "))
+	print(limitedString("May also export contents of the secondary folder, according to current device profile.",
+		80, "- ", "  "))
 	inputHidden("\nPress Enter to continue.")
 
 if __name__ == '__main__':

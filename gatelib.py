@@ -579,9 +579,9 @@ def delete_last_lines(n=1):
 		sys.stdout.write('\x1b[1A')
 		sys.stdout.write('\x1b[2K')
 
-#########
-# OTHER #
-#########
+#######################
+# STRING MANIPULATION #
+#######################
 
 """
 	Prints a title surrounded by a certain character.
@@ -641,6 +641,60 @@ def printTitle(string, topBottomChar="#", sideChar="#", cornerChar="#"):
 """
 def pluralize(base, num, singularSuffix="", pluralSuffix="s"):
 	return base+singularSuffix if num == 1 else base+pluralSuffix
+
+"""
+	Creates a copy of a given string, automatically adding line breaks and indenting lines as necessary, without splitting any words in two.
+
+	Parameters
+	----------
+	string : str
+		The string to be printed.
+	lineLength : int
+		The max length of each printed line.
+	firstLineIndent : str
+		The start of the first line.
+	lineIndent : str
+		The start of all subsequent lines.
+
+	Returns
+	-------
+	The output string if it can be created with the given parameters, False otherwise.
+
+	Examples
+	--------
+	Input 1
+		limitedString("Strong Bad's test sentence is as follows: The fish was delish, and it made quite a dish.", 40, "? ", ". ! ")
+	Output 1
+		"? Strong Bad's test sentence is as\n. ! follows: The fish was delish, and it\n. ! made quite a dish."
+		(Which would look like the following when printed):
+		? Strong Bad's test sentence is as
+		. ! follows: The fish was delish, and it
+		. ! made quite a dish.
+	Input 1
+		limitedString("THIS_WORD_IS_TOO_LONG", 15, "", "")
+	Output:
+		False
+"""
+def limitedString(string, lineLength=80, firstLineIndent="", lineIndent="  "):
+	printArray = string.split(" ")
+	if len(printArray[0]) > lineLength - len(firstLineIndent):
+		return False
+	for elem in printArray[1:]:
+		if len(elem) > lineLength - len(lineIndent):
+			return False
+	totalString = ""
+	currString = firstLineIndent
+	isStartOfLine = True
+	while len(printArray) > 0:
+		if len(printArray[0]) + (not isStartOfLine) <= lineLength - len(currString):
+			currString += (" " if not isStartOfLine else "")+printArray.pop(0)
+			isStartOfLine = False
+		else:
+			totalString += currString+"\n"
+			currString = lineIndent
+			isStartOfLine = True
+	totalString += currString
+	return totalString
 
 """
 SOURCES
