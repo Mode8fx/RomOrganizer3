@@ -461,7 +461,7 @@ def verifyMainRomFolder():
 ##########
 
 def exportRomsets():
-	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, systemName, gameRomDict
+	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, systemName, outputFolder
 	initScreen()
 	if not verifyMainRomFolder():
 		return
@@ -557,7 +557,7 @@ def addGameAndRomToDict(game, rom):
 	gameRomDict[game].append(rom)
 
 def getBestGameName(roms):
-	bestRom = getBestRom(roms)
+	bestRom, _ = getBestRom(roms)
 	atts = getAttributeSplit(bestRom)
 	bestGameName = atts[0]
 	if len(atts) == 1:
@@ -588,7 +588,7 @@ def keepAttribute(att):
 		return True
 
 def getBestRom(roms):
-	romsInBestRegion, _ = getRomsInBestRegion(roms)
+	romsInBestRegion, _, bestRegion = getRomsInBestRegion(roms)
 	if len(romsInBestRegion) == 1:
 		return romsInBestRegion[0]
 	bestScore = -500
@@ -598,11 +598,12 @@ def getBestRom(roms):
 		if currScore >= bestScore:
 			bestScore = currScore
 			bestRom = rom
-	return bestRom
+	return bestRom, bestRegion
 
 def getRomsInBestRegion(roms):
-	firstRegionIndex = 99
 	romsInBestRegion = []
+	bestRegionIndex = 99
+	bestRegion = None
 	for rom in roms:
 		attributeSplit = getAttributeSplit(rom)
 		i = 0
@@ -610,18 +611,19 @@ def getRomsInBestRegion(roms):
 		for region in mainConfig["Regions"]:
 			for regionAtt in mainConfig["Regions"][region].split("|"):
 				if regionAtt in attributeSplit or regionAtt == ":DEFAULT:":
-					if i < firstRegionIndex:
-						firstRegionIndex = i
+					if i < bestRegionIndex:
+						bestRegionIndex = i
 						romsInBestRegion = [rom]
-					elif i == firstRegionIndex:
+					elif i == bestRegionIndex:
 						romsInBestRegion.append(rom)
+					bestRegion = region
 					foundRegion = True
 				if foundRegion:
 					break
 			if foundRegion:
 				break
 			i += 1
-	return romsInBestRegion, firstRegionIndex
+	return romsInBestRegion, bestRegionIndex, bestRegion
 
 def getScore(rom):
 	attributes = getAttributeSplit(rom)[1:]
@@ -672,8 +674,8 @@ def getAttributeSplit(name):
 
 def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 	global newGameRomDict
-	firstBestRoms, firstRegionNum = getRomsInBestRegion(firstGameRoms)
-	secondBestRoms, secondRegionNum = getRomsInBestRegion(secondGameRoms)
+	firstBestRoms, firstRegionNum, _ = getRomsInBestRegion(firstGameRoms)
+	secondBestRoms, secondRegionNum, _ = getRomsInBestRegion(secondGameRoms)
 	if firstRegionNum < secondRegionNum:
 		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		# print("Renamed "+sharedName+" to "+newSecondGameName)
@@ -688,12 +690,43 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 		return tempSecondGameName, True
 
 def copyRomset(romsetCategory):
-	"""
-	Copy roms from mainRomFolder to device according to romsetCategory.
-	Do not copy any roms that would be put in a folder that is listed in deviceConfig["Special Categories"]["Ignored Folders"].
-	Put roms from primary region in system's root folder.
-	Create subfolders according to mainConfig["Special Folders"]
-	"""
+	global gameRomDict
+	currSystemSourceFolder = path.join(mainRomFolder, systemName)
+	currSystemTargetFolder = path.join(outputFolder, systemName)
+	for game in gameRomDict.keys():
+		currSpecialFolders = getSpecialFoldersForGame(game)
+		if arrayOverlap(currSpecialFolders, deviceConfig["Special Categories"]["Ignored Folders"].split("|")):
+			continue
+		currGameFolder = currSystemTargetFolder
+		# TODO: Append region to currGameFolder if it is not primary
+		bestRom, bestRegion = getBestRom(gameRomDict[game])
+		bestRegionIsPrimary = bestRegion in deviceConfig["Special Categories"]["Primary Regions"].split("|")
+		if not bestRegionIsPrimary:
+			currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
+		for folder in currSpecialFolders:
+			currGameFolder = path.join(currGameFolder, "["+folder+"]")
+		if romsetCategory == "Full":
+			for rom in gameRomDict[game]:
+				sourceRomPath = path.join(currSystemSourceFolder, rom)
+				createDir(currGameFolder)
+				targetRomPath = path.join(currGameFolder, rom)
+				if not path.exists(targetRomPath):
+					shutil.copy(sourceRomPath, targetRomPath)
+		else:
+			if romsetCategory == "1G1R" or bestRegionIsPrimary:
+				sourceRomPath = path.join(currSystemSourceFolder, bestRom)
+				targetRomPath = path.join(currGameFolder, bestRom)
+				createDir(currGameFolder)
+				shutil.copy(sourceRomPath, targetRomPath)
+
+def getSpecialFoldersForGame(game):
+	currSpecialFolders = []
+	for folder in mainConfig["Special Folders"]:
+		for keyword in mainConfig["Special Folders"][folder].split("|"):
+			if game.startswith(keyword):
+				currSpecialFolders.append(folder)
+				break
+	return currSpecialFolders
 
 #########################
 # GLOBAL HELPER METHODS #
