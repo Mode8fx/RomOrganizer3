@@ -49,15 +49,22 @@ def main():
 	createDir(logFolder)
 	while True:
 		initScreen()
-		choice = makeChoice("Select an option.", ["Update/audit main romsets", "Create new device profile", "Set main ROM folder", "Set secondary ROM folder", "Export romset", "Help", "Exit"])
+		choice = makeChoice("Select an option.", [
+			"Set main ROM folder      (currently "+(mainRomFolder if mainRomFolder != "" else "not set")+")",
+			"Set secondary ROM folder (currently "+(secondaryRomFolder if secondaryRomFolder != "" else "not set")+")",
+			"Update/audit verified romsets",
+			"Create new device profile",
+			"Export romset",
+			"Help",
+			"Exit"])
 		if choice == 1:
-			updateAndAuditMainRomsets()
-		elif choice == 2:
-			createDeviceProfile()
-		elif choice == 3:
 			setMainRomFolder()
-		elif choice == 4:
+		elif choice == 2:
 			setSecondaryRomFolder()
+		elif choice == 3:
+			updateAndAuditVerifiedRomsets()
+		elif choice == 4:
+			createDeviceProfile()
 		elif choice == 5:
 			mainExport()
 		elif choice == 6:
@@ -70,7 +77,7 @@ def main():
 # UPDATE AND AUDIT #
 ####################
 
-def updateAndAuditMainRomsets():
+def updateAndAuditVerifiedRomsets():
 	currRomsetFolder = askForDirectory("Select the ROM directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
 	sleep(1)
 	if currRomsetFolder == "":
@@ -197,7 +204,6 @@ def renameArchiveAndContent(currArchivePath, newName):
 
 def prepareMainConfig():
 	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs
-	# global regions, specialFolders, specialAttributes, ignoredFolders, primaryRegions, doNotCopyFromDevice
 	if not path.exists(mainConfigFile):
 		createMainConfig()
 	mainConfig = configparser.ConfigParser(allow_no_value=True)
@@ -206,11 +212,8 @@ def prepareMainConfig():
 	mainRomFolder = mainConfig["ROM Folders"]["Main ROM Folder"]
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
 	# regions = [key for key in mainConfig["Regions"]]
-	# specialFolders = mainConfig["Special Folders"].split("|")
-	# specialAttributes = hiddenKeywords + mainConfig["Special ROM Attributes (Advanced)"]["Keywords"].split("|") + mainConfig["Special ROM Attributes (Advanced)"]["Sources"].split("|")
-	# ignoredFolders = deviceConfig["Special Categories"]["Ignored Folders"].split("|")
-	# primaryRegions = deviceConfig["Special Categories"]["Primary Regions"].split("|")
-	# doNotCopyFromDevice = deviceConfig["Special Categories"]["Do Not Copy From Device"].split("|")
+	# specialFolders = barSplit(mainConfig["Special Folders"])
+	# specialAttributes = hiddenKeywords + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	try:
 		mainSystemDirs = [d for d in listdir(mainRomFolder) if path.isdir(path.join(mainRomFolder, d))]
 	except:
@@ -229,6 +232,7 @@ def createMainConfig():
 	mainConfig.set('ROM Folders', '# The directory of the main ROM folder you want to export from, which contains system folders that contain No-Intro verified ROMs. If you leave this blank, the program will ask for this folder when you try to export romsets.')
 	mainConfig["ROM Folders"]["Main ROM Folder"] = ""
 	mainConfig.set('ROM Folders', '# The directory of the secondary ROM folder you want to export from, which contains system folders that can contain unverified ROMs/other files (this is intended for rom hacks, homebrew, etc). If you leave this blank, the program will ask for this folder when you try to export the secondary folder.')
+	mainConfig.set('ROM Folders', '###')
 	mainConfig["ROM Folders"]["Secondary ROM Folder"] = ""
 	# Regions
 	mainConfig["Regions"] = {}
@@ -237,6 +241,7 @@ def createMainConfig():
 	mainConfig.set('Regions', '# Additionally, you may set at least one region as primary (see device profiles). Primary regions do not have a subfolder, and are instead exported to the system\'s root folder.')
 	mainConfig.set('Regions', '# Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and Fr tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe category above the USA category. You may also create your own region categories.')
 	mainConfig.set('Regions', '# Finally, the category with :DEFAULT: (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions. Keep it as the last possible region tag.')
+	mainConfig.set('Regions', '###')
 	mainConfig["Regions"]["Test Program"] = "|".join([
 		"Test Program"
 		])
@@ -265,6 +270,7 @@ def createMainConfig():
 	mainConfig.set('Special Folders', '# You could then choose to ignore any ROMs marked as \"Compilation\" when exporting to a specific device (see device profiles).')
 	mainConfig.set('Special Folders', '# Feel free to add additional Special Folders (or add to existing folders) using the format below (with \"|\" as a delimiter).')
 	mainConfig.set('Special Folders', '# Special Folders are created in order of descending priority, so (to use the default example) if a ROM is in both \"Compilation\" and \"GBA Video\", it will be added to the folder \"SYSTEM/REGION/Compilation/GBA Video/GAME\".')
+	mainConfig.set('Special Folders', '###')
 	mainConfig["Special Folders"]["Compilation"] = "|".join([
 		"2 Games in 1 -", "2 Games in 1! -", "2 Disney Games -", "2-in-1 Fun Pack -",
 		"2 Great Games! -", "2 in 1 -", "2 in 1 Game Pack -", "2 Jeux en 1",
@@ -284,6 +290,7 @@ def createMainConfig():
 	mainConfig["Special ROM Attributes (Advanced)"] = {}
 	mainConfig.set('Special ROM Attributes (Advanced)', '# Special ROM Attributes are substrings in verified ROM names (specifically, the parentheses fields in these names) that are ignored when trying to determine the best name for a game.')
 	mainConfig.set('Special ROM Attributes (Advanced)', '# \"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).')
+	mainConfig.set('Special ROM Attributes (Advanced)', '###')
 	mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
 		"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
 		"Club Nintendo", "Aftermarket", "Test Program", "Competition Cart",
@@ -303,8 +310,9 @@ def createMainConfig():
 
 def selectDeviceProfile():
 	global deviceName, deviceConfig
+	global ignoredFolders, primaryRegions
 	initScreen()
-	deviceProfiles = [prof for prof in listdir(profilesFolder) if path.splitext(prof)[1]== ".ini"]
+	deviceProfiles = [prof for prof in listdir(profilesFolder) if path.splitext(prof)[1] == ".ini"]
 	if len(deviceProfiles) > 0:
 		dp = makeChoice("\nSelect a device profile (which device are you copying to?)", [path.splitext(prof)[0] for prof in deviceProfiles]+["Create new profile", "Back to menu"])
 		if dp == len(deviceProfiles)+1:
@@ -320,6 +328,9 @@ def selectDeviceProfile():
 			deviceConfig.optionxform = str
 			deviceConfigFile = path.join(profilesFolder, deviceName+".ini")
 			deviceConfig.read(deviceConfigFile)
+			ignoredFolders = barSplit(deviceConfig["Special Categories"]["Ignored Folders"])
+			primaryRegions = barSplit(deviceConfig["Special Categories"]["Primary Regions"])
+			# doNotCopyFromDevice = barSplit(deviceConfig["Special Categories"]["Do Not Copy From Device"])
 			return True
 	else:
 		print("\nNo device profiles found. Go back to the main menu and select \"Create new device profile\".")
@@ -364,6 +375,8 @@ def createDeviceProfile():
 			deviceConfig["Main Romsets"][currSystemName] = "1G1R"
 		elif copyType == 3:
 			deviceConfig["Main Romsets"][currSystemName] = "1G1R Primary"
+		elif copyType == 4:
+			deviceConfig["Main Romsets"][currSystemName] = "None"
 	# Secondary Romsets
 	deviceConfig["Secondary Romsets"] = {}
 	if not skipSecondary:
@@ -372,6 +385,8 @@ def createDeviceProfile():
 			copyType = makeChoice(currSystemName, ["Yes", "No"])
 			if copyType == 1:
 				deviceConfig["Secondary Romsets"][currSystemName] = "Yes"
+			else:
+				deviceConfig["Secondary Romsets"][currSystemName] = "No"
 	# Special Categories
 	deviceConfig["Special Categories"] = {}
 
@@ -383,7 +398,7 @@ def createDeviceProfile():
 	regions = [region for region in mainConfig["Regions"]]
 	print(", ".join(["\""+entry+"\"" for entry in specialFolders+regions]))
 	currInput = input().strip()
-	currInputParsed = [val.strip() for val in currInput.split("|")]
+	currInputParsed = [val.strip() for val in barSplit(currInput)]
 	deviceConfig["Special Categories"]["Ignored Folders"] = "|".join(currInputParsed)
 
 	print("\n(4/5) Please type the names of any Primary Regions.")
@@ -393,7 +408,7 @@ def createDeviceProfile():
 	print("According to your settings.ini file, possible Regions are:")
 	print(", ".join(["\""+entry+"\"" for entry in regions]))
 	currInput = input().strip()
-	currInputParsed = [val.strip() for val in currInput.split("|")]
+	currInputParsed = [val.strip() for val in barSplit(currInput)]
 	deviceConfig["Special Categories"]["Primary Regions"] = "|".join(currInputParsed)
 
 	print("\n(5/5) When exporting, you have the option to copy contents that exist in this device's rom folder, but not in the main rom folder, into a \"Copied From Device\" folder.")
@@ -404,7 +419,7 @@ def createDeviceProfile():
 	print("For example, if you wanted to ignore anything in the \"Steam\" folder, you would type the following: Steam")
 	print("Common recommended subfolders are Steam, Windows, and PC Games")
 	currInput = input().strip()
-	currInputParsed = [val.strip() for val in currInput.split("|")]
+	currInputParsed = [val.strip() for val in barSplit(currInput)]
 	deviceConfig["Special Categories"]["Do Not Copy From Device"] = "|".join(currInputParsed)
 
 	with open(deviceConfigFile, 'w') as dcf:
@@ -427,9 +442,9 @@ def setMainRomFolder():
 	mainConfig.read(mainConfigFile)
 	mainConfig["ROM Folders"]["Main ROM Folder"] = newMainRomFolder
 	mainRomFolder = newMainRomFolder
+	mainSystemDirs = [d for d in listdir(mainRomFolder) if path.isdir(path.join(mainRomFolder, d))]
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
-	mainSystemDirs = [d for d in listdir(mainRomFolder) if path.isdir(path.join(mainRomFolder, d))]
 
 def setSecondaryRomFolder():
 	global mainConfig, secondarySystemDirs, secondaryRomFolder
@@ -442,9 +457,9 @@ def setSecondaryRomFolder():
 	mainConfig.read(mainConfigFile)
 	mainConfig["ROM Folders"]["Secondary ROM Folder"] = newSecondaryRomFolder
 	secondaryRomFolder = newSecondaryRomFolder
+	secondarySystemDirs = [d for d in listdir(secondaryRomFolder) if path.isdir(path.join(secondaryRomFolder, d))]
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
-	secondarySystemDirs = [d for d in listdir(secondaryRomFolder) if path.isdir(path.join(secondaryRomFolder, d))]
 
 def verifyMainRomFolder():
 	if mainRomFolder == "":
@@ -480,20 +495,20 @@ def mainExport():
 			systemChoices = []
 		elif len(currProfileMainDirs)+1 in systemChoices:
 			systemChoices = list(range(1, len(currProfileMainDirs)+1))
-	if secondaryRomFolder != "":
+	if path.isdir(secondaryRomFolder) and len(deviceConfig["Secondary Romsets"]) > 0:
 		secondaryFolderName = path.basename(secondaryRomFolder)
-		currProfileSecondaryDirs = [system for system in list(deviceConfig["Secondary Romsets"].keys()) if deviceConfig["Secondary Romsets"][system] in ("Full", "1G1R", "1G1R Primary")]
-		if len(currProfileMainDirs) == 0:
+		currProfileSecondaryDirs = [system for system in list(deviceConfig["Secondary Romsets"].keys()) if deviceConfig["Secondary Romsets"][system] == "Yes"]
+		if len(currProfileSecondaryDirs) == 0:
 			if len(secondarySystemDirs) > 0:
 				print("The current profile does not allow any "+secondaryFolderName+" folders.")
-			otherChoices = []
+			secondaryChoices = []
 		else:
-			otherChoices = makeChoice("Select system(s) from "+secondaryFolderName+" folder. You can select multiple choices by separating them with spaces:", currProfileSecondaryDirs+["All", "None"], allowMultiple=True)
-			if len(currProfileSecondaryDirs)+2 in otherChoices:
-				otherChoices = []
-			elif len(currProfileSecondaryDirs)+1 in otherChoices:
-				otherChoices = list(range(1, len(currProfileSecondaryDirs)+1))
-	updateOtherChoice = makeChoice("Update \""+path.basename(updateFromDeviceFolder)+"\" folder by adding any files that are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
+			secondaryChoices = makeChoice("Select system(s) from "+secondaryFolderName+" folder. You can select multiple choices by separating them with spaces:", currProfileSecondaryDirs+["All", "None"], allowMultiple=True)
+			if len(currProfileSecondaryDirs)+2 in secondaryChoices:
+				secondaryChoices = []
+			elif len(currProfileSecondaryDirs)+1 in secondaryChoices:
+				secondaryChoices = list(range(1, len(currProfileSecondaryDirs)+1))
+	updateSecondaryChoice = makeChoice("Update \""+path.basename(updateFromDeviceFolder)+"\" folder by adding any files that are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
 	outputFolder = askForDirectory("\nSelect the ROM directory of your "+deviceName+" (example: F:/Roms).")
 	initScreen()
 	for sc in systemChoices:
@@ -507,8 +522,19 @@ def mainExport():
 			print("Skipping current system.")
 			continue
 		generateGameRomDict()
-		copyRomset(romsetCategory)
-	inputHidden("Press Enter to continue.")
+		copyMainRomset(romsetCategory)
+	if path.isdir(secondaryRomFolder):
+		for sc in secondaryChoices:
+			secondaryChoice = currProfileSecondaryDirs[sc-1]
+			systemName = secondaryChoice
+			secondaryCategory = deviceConfig["Secondary Romsets"][systemName]
+			if secondaryCategory == "Yes":
+				copySecondaryRomset()
+	if updateFromDeviceFolder != "":
+		if updateSecondaryChoice == 1:
+			updateSecondary()
+	print("\nReview the log files for more information on what files were exchanged between the main drive and "+deviceName+".")
+	inputHidden("Press Enter to return to the main menu.")
 
 def generateGameRomDict():
 	global gameRomDict
@@ -520,7 +546,9 @@ def generateGameRomDict():
 	root = tree.getroot()
 	allGameFields = root[1:]
 	for file in listdir(systemFolder):
-		# currFilePath = path.join(systemFolder, file)
+		_, _, currRegion = getRomsInBestRegion([path.splitext(file)[0]])
+		if currRegion in ignoredFolders:
+			continue
 		romName = path.splitext(file)[0]
 		for game in allGameFields:
 			if game.get("name") == romName:
@@ -610,7 +638,7 @@ def getRomsInBestRegion(roms):
 		i = 0
 		foundRegion = False
 		for region in mainConfig["Regions"]:
-			for regionAtt in mainConfig["Regions"][region].split("|"):
+			for regionAtt in barSplit(mainConfig["Regions"][region]):
 				if regionAtt in attributeSplit or regionAtt == ":DEFAULT:":
 					if i < bestRegionIndex:
 						bestRegionIndex = i
@@ -630,7 +658,7 @@ def getScore(rom):
 	attributes = getAttributeSplit(rom)[1:]
 	score = 100
 	lastVersion = 0
-	sources = mainConfig["Special ROM Attributes (Advanced)"]["Sources"].split("|")
+	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	for att in attributes:
 		if att.startswith("Rev"):
 			try:
@@ -690,24 +718,24 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 		tempSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		return tempSecondGameName, True
 
-def copyRomset(romsetCategory):
+def copyMainRomset(romsetCategory):
 	global gameRomDict
-	print("\nCopying romset for "+systemName+".")
+	print("\nCopying main romset for "+systemName+".")
 	currSystemSourceFolder = path.join(mainRomFolder, systemName)
 	currSystemTargetFolder = path.join(outputFolder, systemName)
 	numGames = len(gameRomDict.keys())
 	romsCopied = []
-	romsSkipped = []
+	numRomsSkipped = 0
 	romsFailed = []
 	with tqdm(total=numGames) as progressBar:
 		for game in gameRomDict.keys():
 			currSpecialFolders = getSpecialFoldersForGame(game)
-			if arrayOverlap(currSpecialFolders, deviceConfig["Special Categories"]["Ignored Folders"].split("|")):
+			if arrayOverlap(currSpecialFolders, ignoredFolders):
 				progressBar.update(1)
 				continue
 			currGameFolder = currSystemTargetFolder
 			bestRom, bestRegion = getBestRom(gameRomDict[game])
-			bestRegionIsPrimary = bestRegion in deviceConfig["Special Categories"]["Primary Regions"].split("|")
+			bestRegionIsPrimary = bestRegion in primaryRegions
 			if not bestRegionIsPrimary:
 				currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
 			if "(Unl" in bestRom:
@@ -734,11 +762,11 @@ def copyRomset(romsetCategory):
 								rmdir(createdFolder)
 							romsFailed.append(rom)
 					else:
-						romsSkipped.append(rom)
+						numRomsSkipped += 1
 			elif romsetCategory == "1G1R" or bestRegionIsPrimary:
 				sourceRomPath = path.join(currSystemSourceFolder, bestRom)
 				targetRomPath = path.join(currGameFolder, bestRom)
-				if not path.exists(targetRomPath):
+				if not path.isfile(targetRomPath):
 					try:
 						createdFolder = createDir(currGameFolder)
 						shutil.copy(sourceRomPath, targetRomPath)
@@ -749,17 +777,17 @@ def copyRomset(romsetCategory):
 							rmdir(createdFolder)
 						romsFailed.append(bestRom)
 				else:
-					romsSkipped.append(bestRom)
+					numRomsSkipped += 1
 			progressBar.update(1)
 	createMainCopiedLog(romsCopied, romsFailed)
 	print("Copied "+str(len(romsCopied))+" new roms.")
-	print("Skipped "+str(len(romsSkipped))+" roms that already exist on this device.")
+	print("Skipped "+str(numRomsSkipped)+" roms that already exist on this device.")
 	print("Failed to copy "+str(len(romsFailed))+" new roms.")
 
 def getSpecialFoldersForGame(game):
 	currSpecialFolders = []
 	for folder in mainConfig["Special Folders"]:
-		for keyword in mainConfig["Special Folders"][folder].split("|"):
+		for keyword in barSplit(mainConfig["Special Folders"][folder]):
 			if game.startswith(keyword):
 				currSpecialFolders.append(folder)
 				break
@@ -779,6 +807,110 @@ def createMainCopiedLog(romsCopied, romsFailed):
 				romsetLogFile.writelines(file+"\n")
 		romsetLogFile.close()
 
+def copySecondaryRomset():
+	print("\nCopying secondary romset for "+systemName+".")
+	currSystemSourceFolder = path.join(secondaryRomFolder, systemName)
+	currSystemTargetFolder = path.join(outputFolder, systemName)
+	numFiles = 0
+	for root, dirs, files in walk(currSystemSourceFolder):
+		for file in files:
+			numFiles += 1
+	filesCopied = []
+	numFilesSkipped = 0
+	filesFailed = []
+	with tqdm(total=numFiles) as progressBar:
+		for root, dirs, files in walk(currSystemSourceFolder):
+			for fileName in files:
+				currRoot = root.split(currSystemSourceFolder)[1][1:]
+				oldFileDirPathArray = getPathArray(root)
+				if arrayOverlap(ignoredFolders, oldFileDirPathArray):
+					continue
+				sourceRomPath = path.join(root, fileName)
+				targetRomDir = path.join(currSystemTargetFolder, currRoot)
+				targetRomPath = path.join(targetRomDir, fileName)
+				if not path.isfile(targetRomPath):
+					try:
+						createdFolder = createDir(targetRomDir)
+						shutil.copy(sourceRomPath, targetRomPath)
+						filesCopied.append(targetRomPath)
+					except:
+						# print("\nFailed to copy: "+sourceRomPath)
+						if createdFolder and listdir(targetRomDir) == 0:
+							rmdir(targetRomDir)
+						filesFailed.append(sourceRomPath)
+				else:
+					numFilesSkipped += 1
+				progressBar.update(1)
+	createSecondaryCopiedLog(filesCopied, filesFailed)
+	print("Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+".")
+	print("Skipped "+str(numFilesSkipped)+pluralize(" file", numFilesSkipped)+" that already exist on this device.")
+	print("Failed to copy "+str(len(filesFailed))+" new "+pluralize("file", len(filesFailed))+".")
+
+def createSecondaryCopiedLog(filesCopied, filesFailed):
+	updateFolderName = path.basename(updateFromDeviceFolder)
+	if len(filesCopied) > 0:
+		filesCopied.sort()
+		otherLogFile = open(path.join(logFolder, "Log - "+updateFolderName+" (to "+deviceName+").txt"), "w", encoding="utf-8", errors="replace")
+		otherLogFile.writelines("=== Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+" from "+updateFolderName+" to "+deviceName+" ===\n\n")
+		for file in filesCopied:
+			otherLogFile.writelines(file+"\n")
+		if len(filesFailed) > 0:
+			otherLogFile.writelines("\n= FAILED TO COPY =\n")
+			for file in filesFailed:
+				otherLogFile.writelines(file+"\n")
+		otherLogFile.close()
+
+def updateSecondary():
+	updateFolderName = path.basename(updateFromDeviceFolder)
+	print("\nUpdating "+updateFolderName+" folder from "+deviceName+".")
+	createDir(updateFromDeviceFolder)
+	filesCopied = []
+	numFilesSkipped = 0
+	filesFailed = []
+	for root, dirs, files in walk(outputFolder):
+		dirs[:] = [d for d in dirs if d not in barSplit(deviceConfig["Special Categories"]["Do Not Copy From Device"])]
+		currRoot = root.split(outputFolder)[1][1:]
+		try:
+			currSystem = getPathArray(currRoot)[0]
+		except:
+			currSystem = ""
+		for file in files:
+			fileInOutput = path.join(root, file)
+			fileInRomset = path.join(mainRomFolder, currSystem, file)
+			fileInSecondary = path.join(secondaryRomFolder, currRoot, file)
+			updateFolder = path.join(updateFromDeviceFolder, currRoot)
+			fileInUpdate = path.join(updateFolder, file)
+			if not (path.isfile(fileInRomset) or path.isfile(fileInSecondary) or path.isfile(fileInUpdate)):
+				createDir(updateFolder)
+				try:
+					shutil.copy(fileInOutput, fileInUpdate)
+					# print("From "+deviceName+" to "+updateFolderName+": "+fileInUpdate)
+					filesCopied.append(fileInUpdate)
+				except:
+					# print("Failed to copy: "+fileInOutput)
+					filesFailed.append(fileInOutput)
+	# print("\nUpdated "+updateFolderName+" folder with "+str(len(filesCopied))+" new files.")
+	# print("\nRemoving empty folders from "+updateFolderName+"...")
+	removeEmptyFolders(updateFromDeviceFolder)
+	createUpdateToSecondaryLog(filesCopied, filesFailed)
+	print("Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+".")
+	print("Skipped "+str(numFilesSkipped)+pluralize(" file", numFilesSkipped)+" that already exist on this device.")
+	print("Failed to copy "+str(len(filesFailed))+" new "+pluralize("file", len(filesFailed))+".")
+
+def createUpdateToSecondaryLog(filesCopied, filesFailed):
+	updateFolderName = path.basename(updateFromDeviceFolder)
+	if len(filesCopied):
+		filesCopied.sort()
+		otherLogFile = open(path.join(logFolder, "Log - "+updateFolderName+" (from "+deviceName+").txt"), "w", encoding="utf-8", errors="replace")
+		otherLogFile.writelines("=== Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+" from "+deviceName+" to "+updateFolderName+" ===\n\n")
+		for file in filesCopied:
+			otherLogFile.writelines(file+"\n")
+		if len(filesFailed) > 0:
+			otherLogFile.writelines("\n= FAILED TO COPY =\n")
+			for file in filesFailed:
+				otherLogFile.writelines(file+"\n")
+		otherLogFile.close()
+
 #########################
 # GLOBAL HELPER METHODS #
 #########################
@@ -788,12 +920,12 @@ def askForDirectory(string):
 	sleep(0.5)
 	root = Tk()
 	root.withdraw()
-	outputFolder = filedialog.askdirectory()
-	if outputFolder != "":
-		isCorrect = makeChoice("Are you sure this is the correct folder?\n"+outputFolder, ["Yes", "No"])
+	directory = filedialog.askdirectory()
+	if directory != "":
+		isCorrect = makeChoice("Are you sure this is the correct folder?\n"+directory, ["Yes", "No"])
 		if isCorrect == 2:
-			outputFolder = ""
-	return outputFolder
+			directory = ""
+	return directory
 
 def initScreen():
 	clearScreen()
@@ -801,13 +933,28 @@ def initScreen():
 	printTitle("Rom Organizer 3")
 	print()
 
+def barSplit(string):
+	if string.strip() == "":
+		return []
+	return string.split("|")
+
 ###############
 # HELP SCREEN #
 ###############
 
 def printHelp():
 	clearScreen()
-	print("\nUpdate/audit romsets")
+	print("\nSet main ROM folder")
+	print(limitedString("Allows you to set a main rom folder. This is the directory that contains system folders, which contain No-Intro verified ROMs.",
+		80, "- ", "  "))
+	print(limitedString("Example: MAINFOLDER/Sega Genesis/Sonic the Hedgehog (USA, Europe).zip",
+		80, "- ", "  "))
+	print("\nSet secondary ROM folder")
+	print(limitedString("(Optional) Allows you to set a secondary rom folder. This is a directory that contains system folders, which can contain unverified ROMs/other files (rom hacks, homebrew, etc).",
+		80, "- ", "  "))
+	print(limitedString("Example: SECONDARYFOLDER/Sega Genesis/[Hacks]/Sonic/Sonic 2 Delta.zip",
+		80, "- ", "  "))
+	print("\nUpdate/audit verified romsets")
 	print(limitedString("Updates the names of misnamed roms (and the ZIP files containing them, if applicable) according to the rom's entry in the No-Intro Parent/Clone DAT. This is determined by the rom's matching hash code in the DAT, so the original name doesn't matter.",
 		80, "- ", "  "))
 	print(limitedString("For each system, creates a log file indicating which roms exist in the romset, which roms are missing, and which roms are in the set that don't match anything from the DAT.",
@@ -823,16 +970,6 @@ def printHelp():
 		80, "  - ", "    "))
 	print(limitedString("Which folders, if any, exist in your device's rom folder that you do not want to copy back to the main folder.",
 		80, "  - ", "    "))
-	print("\nSet main ROM folder")
-	print(limitedString("Allows you to set a main rom folder. This is the directory that contains system folders, which contain No-Intro verified ROMs.",
-		80, "- ", "  "))
-	print(limitedString("Example: MAINFOLDER/Sega Genesis/Sonic the Hedgehog (USA, Europe).zip",
-		80, "- ", "  "))
-	print("\nSet secondary ROM folder")
-	print(limitedString("(Optional) Allows you to set a secondary rom folder. This is a directory that contains system folders, which can contain unverified ROMS/other files (rom hacks, homebrew, etc).",
-		80, "- ", "  "))
-	print(limitedString("Example: SECONDARYFOLDER/Sega Genesis/[Hacks]/Sonic/Sonic 2 Delta.zip",
-		80, "- ", "  "))
 	print("\nExport roms")
 	print(limitedString("Exports romset according to current device profile. Either all systems or a subset of systems may be chosen, and roms that already exist on the device are not re-exported, allowing you to simply update a device with newly-added roms.",
 		80, "- ", "  "))
