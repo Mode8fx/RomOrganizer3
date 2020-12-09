@@ -15,6 +15,13 @@ import configparser
 from dateutil.parser import parse as dateParse
 from tqdm import tqdm #, trange
 
+"""
+TODO:
+
+- Add Redump compatibility
+- Wrap into an executable
+"""
+
 progFolder = getCurrFolder()
 sys.path.append(progFolder)
 crcHasher = FileHash('crc32')
@@ -27,13 +34,13 @@ redumpDir = path.join(progFolder, "Redump Database")
 profilesFolder = path.join(progFolder, "Device Profiles")
 logFolder = path.join(progFolder, "Logs")
 
-categoryValues = {
-	"Games" : 0,
-	"Demos" : 1,
-	"Bonus Discs" : 2,
-	"Applications" : 3,
-	"Coverdiscs" : 4
-}
+# categoryValues = {
+# 	"Games" : 0,
+# 	"Demos" : 1,
+# 	"Bonus Discs" : 2,
+# 	"Applications" : 3,
+# 	"Coverdiscs" : 4
+# }
 
 hiddenKeywords = ["Rev", "Disc", "Beta", "Demo", "Sample", "Proto", "Alt", "Earlier", "Download Station"]
 
@@ -78,8 +85,8 @@ def main():
 ####################
 
 def updateAndAuditVerifiedRomsets():
+	initScreen()
 	currRomsetFolder = askForDirectory("Select the ROM directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
-	sleep(1)
 	if currRomsetFolder == "":
 		print("Action cancelled.")
 		sleep(1)
@@ -89,10 +96,19 @@ def updateAndAuditVerifiedRomsets():
 		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
 			continue
+		isNoIntro = True
 		currSystemDAT = path.join(noIntroDir, currSystemName+".dat")
 		if not path.exists(currSystemDAT):
-			print("Database file not found for "+currSystemDAT)
-			continue
+			isNoIntro = False
+			currSystemDAT = path.join(redumpDir, currSystemName+".dat")
+			if not path.exists(currSystemDAT):
+				for file in listdir(redumpDir):
+					if path.splitext(file)[0].split(" - Datfile")[0] == currSystemName:
+						currSystemDAT = path.join(redumpDir, file)
+						break
+				if not path.exists(currSystemDAT):
+					print("Database file not found for "+currSystemName+".")
+					continue
 		tree = ET.parse(currSystemDAT)
 		root = tree.getroot()
 		allGameFields = root[1:]
@@ -100,59 +116,90 @@ def updateAndAuditVerifiedRomsets():
 		for game in allGameFields:
 			allGameNamesInDAT[game.get("name")] = False
 		romsWithoutCRC = []
-		for file in listdir(currSystemFolder):
-			finalState = 0 # 0 = 
-			currFilePath = path.join(currSystemFolder, file)
-			currFileName = path.splitext(file)[0]
-			if not path.isfile(currFilePath):
-				continue
-			if zipfile.is_zipfile(currFilePath):
-				with zipfile.ZipFile(currFilePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
-					if len(zippedFile.namelist()) > 1:
-						print("\n"+file+" archive contains more than one file. Skipping.")
+		numFiles = 0
+		for root, dirs, files in walk(currSystemFolder):
+			for file in files:
+				numFiles += 1
+		with tqdm(total=numFiles) as progressBar:
+			for root, dirs, files in walk(currSystemFolder):
+				for file in files:
+					progressBar.update(1)
+					currFilePath = path.join(root, file)
+					currFileName, currFileExt = path.splitext(file)
+					if not path.isfile(currFilePath):
 						continue
-					fileInfo = zippedFile.infolist()[0]
-					# currZippedFile = fileInfo.filename
-					currFileCRC = format(fileInfo.CRC & 0xFFFFFFFF, '08x').upper() # crc32
-			else:
-				# currZippedFile = None
-				currFileCRC = crcHasher.hash_file(currFilePath).upper()
-			foundMatch = False
-			for game in allGameFields:
-				currDBGameCRC = game.find("rom").get("crc").upper()
-				if currDBGameCRC == currFileCRC:
-					currDBGameName = game.get("name")
-					allGameNamesInDAT[currDBGameName] = True
-					if currFileName != currDBGameName:
-						currFileExt = path.splitext(currFilePath)[1]
-						if path.exists(path.join(currSystemFolder, currDBGameName+currFileExt)): # two of the same file (with different names) exist
-							i = 1
-							while True:
-								incrementedGameName = currDBGameName+" (copy) ("+str(i)+")"
-								if not path.exists(path.join(currSystemFolder, incrementedGameName+currFileExt)):
-									break
-								i += 1
-							print("Warning: Multiple copies of the same rom may exist ("+currDBGameName+").")
-							currDBGameName = incrementedGameName
-						if zipfile.is_zipfile(currFilePath):
-							renameArchiveAndContent(currFilePath, currDBGameName)
-						else:
-							rename(currFilePath, path.join(currSystemFolder, currDBGameName+currFileExt))
-							print("Renamed "+currFileName+" to "+currDBGameName)
-					foundMatch = True
-					break
-			if not foundMatch:
-				romsWithoutCRC.append(currFileName+" ("+file+")")
-		xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
-		xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
-		createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName)
-		numNoCRC = len(romsWithoutCRC)
-		if numNoCRC > 0:
-			print("Warning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
-			print(pluralize("", numNoCRC, "This file", "These files")+" will be ignored when exporting this system's romset to another")
-			print("device.")
+					foundMatch = False
+					if isNoIntro:
+						currFileCRC = getCRC(currFilePath)
+						if not currFileCRC:
+							print(file+" archive contains more than one file. Skipping.")
+							continue
+						for game in allGameFields:
+							try:
+								currDBGameCRC = game.find("rom").get("crc").upper()
+							except:
+								currDBGameCRC = None
+							if currDBGameCRC == currFileCRC:
+								currDBGameName = game.get("name")
+								allGameNamesInDAT[currDBGameName] = True
+								if currFileName != currDBGameName:
+									i = 0
+									if path.exists(path.join(root, currDBGameName+currFileExt)): # two of the same file (with different names) exist
+										originalDBGameName = currDBGameName
+										while True:
+											i += 1
+											incrementedGameName = currDBGameName+" (copy) ("+str(i)+")"
+											if not path.exists(path.join(root, incrementedGameName+currFileExt)):
+												break
+										print("\nWarning: Multiple copies of the same rom may exist ("+currDBGameName+").")
+										currDBGameName = incrementedGameName
+									renameGame(currFilePath, currDBGameName, currFileExt)
+									if i > 0:
+										file1 = path.join(root, originalDBGameName+currFileExt)
+										if getCRC(file1) != currDBGameCRC: # If the romset started with a rom that has a name in the database, but with the wrong hash (e.g. it's called "Doom 64 (USA)", but it's actually something else)
+											file2 = path.join(root, currDBGameName+currFileExt)
+											renameGame(file1, originalDBGameName+" (no match)", currFileExt)
+											renameGame(file2, originalDBGameName, currFileExt)
+								foundMatch = True
+								break
+					else:
+						for game in allGameFields:
+							currDBGameName = game.get("name")
+							if currFileName == currDBGameName:
+								allGameNamesInDAT[currDBGameName] = True
+								foundMatch = True
+								break
+					if not foundMatch:
+						romsWithoutCRC.append(currFileName+" ("+file+")")
+			xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
+			xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
+			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName)
+			numNoCRC = len(romsWithoutCRC)
+			if numNoCRC > 0:
+				print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
+				print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
+					80, "", ""))
 
 	inputHidden("\nDone. Press Enter to continue.")
+
+def getCRC(filePath):
+	if zipfile.is_zipfile(filePath):
+		with zipfile.ZipFile(filePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
+			if len(zippedFile.namelist()) > 1:
+				return False
+			fileInfo = zippedFile.infolist()[0]
+			# currZippedFile = fileInfo.filename
+			return format(fileInfo.CRC & 0xFFFFFFFF, '08x').upper() # crc32
+	else:
+		# currZippedFile = None
+		return crcHasher.hash_file(filePath).upper()
+
+def renameGame(filePath, newName, fileExt):
+	if zipfile.is_zipfile(filePath):
+		renameArchiveAndContent(filePath, newName)
+	else:
+		rename(filePath, path.join(path.dirname(filePath), newName+fileExt))
+		print("Renamed "+path.splitext(path.basename(filePath))[0]+" to "+newName)
 
 def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName):
 	xmlRomsInSet.sort()
@@ -179,24 +226,24 @@ def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSyst
 			auditLogFile.writelines(rom+"\n")
 	auditLogFile.close()
 
-def renameArchiveAndContent(currArchivePath, newName):
-	with zipfile.ZipFile(currArchivePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
+def renameArchiveAndContent(archivePath, newName):
+	with zipfile.ZipFile(archivePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
 		zippedFiles = zippedFile.namelist()
 		if len(zippedFiles) > 1:
-			print("\nThis archive contains more than one file. Skipping.")
+			print("This archive contains more than one file. Skipping.")
 			return
 		fileExt = path.splitext(zippedFiles[0])[1]
-		archiveExt = path.splitext(currArchivePath)[1]
-		zippedFile.extract(zippedFiles[0], path.dirname(currArchivePath))
-		currExtractedFilePath = path.join(path.dirname(currArchivePath), zippedFiles[0])
-		newArchivePath = path.join(path.dirname(currArchivePath), newName+archiveExt)
+		archiveExt = path.splitext(archivePath)[1]
+		zippedFile.extract(zippedFiles[0], path.dirname(archivePath))
+		currExtractedFilePath = path.join(path.dirname(archivePath), zippedFiles[0])
+		newArchivePath = path.join(path.dirname(archivePath), newName+archiveExt)
 		newExtractedFilePath = path.splitext(newArchivePath)[0]+fileExt
 		rename(currExtractedFilePath, newExtractedFilePath)
-	remove(currArchivePath)
+	remove(archivePath)
 	with zipfile.ZipFile(newArchivePath, 'w', zipfile.ZIP_DEFLATED) as newZip:
 		newZip.write(newExtractedFilePath, arcname='\\'+newName+fileExt)
 	remove(newExtractedFilePath)
-	print("Renamed "+path.splitext(path.basename(currArchivePath))[0]+" to "+newName+"\n")
+	print("Renamed "+path.splitext(path.basename(archivePath))[0]+" to "+newName)
 
 ############################
 # CONFIG / DEVICE PROFILES #
@@ -277,7 +324,7 @@ def createMainConfig():
 		"3 Games in 1 -", "4 Games on One Game Pak", "Double Game!",
 		"Castlevania Double Pack", "Combo Pack - ", "Crash Superpack",
 		"Spyro Superpack", "Crash & Spyro Superpack", "Crash & Spyro Super Pack",
-		"Double Pack"
+		"Double Pack", "Kunio-kun Nekketsu Collection"
 		])
 	mainConfig["Special Folders"]["GBA Video"] = "Game Boy Advance Video"
 	mainConfig["Special Folders"]["NES & Famicom"] = "|".join([
@@ -301,7 +348,8 @@ def createMainConfig():
 		"Namco Museum Archives", "Kiosk", "iQue", "Sega Channel", "WiiWare",
 		"DLC", "Minis", "Promo", "Nintendo Channel", "Nintendo Channel, Alt",
 		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn",
-		"Undumped Japanese Download Station", "WiiWare Broadcast"
+		"Undumped Japanese Download Station", "WiiWare Broadcast",
+		"Disk Writer", "Collection of Mana"
 		])
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
@@ -515,14 +563,24 @@ def mainExport():
 		systemName = currProfileMainDirs[sc-1]
 		print("\n"+systemName)
 		romsetCategory = deviceConfig["Main Romsets"][systemName]
-		isNoIntro = True
+		isRedump = False
 		currSystemDAT = path.join(noIntroDir, systemName+".dat")
 		if not path.exists(currSystemDAT):
-			print("Database file not found for "+currSystemDAT)
-			print("Skipping current system.")
-			continue
-		generateGameRomDict()
-		copyMainRomset(romsetCategory)
+			# print("Database file not found for "+currSystemDAT)
+			# print("Skipping current system.")
+			# continue
+			isRedump = True
+			currSystemDAT = path.join(redumpDir, systemName+".dat")
+			if not path.exists(currSystemDAT):
+				for file in listdir(redumpDir):
+					if path.splitext(file)[0].split(" - Datfile")[0] == systemName:
+						currSystemDAT = path.join(redumpDir, file)
+						break
+				if not path.exists(currSystemDAT):
+					print("Database file not found for "+systemName+".")
+					continue
+		generateGameRomDict(currSystemDAT)
+		copyMainRomset(romsetCategory, isRedump)
 	if path.isdir(secondaryRomFolder):
 		for sc in secondaryChoices:
 			secondaryChoice = currProfileSecondaryDirs[sc-1]
@@ -536,12 +594,12 @@ def mainExport():
 	print("\nReview the log files for more information on what files were exchanged between the main drive and "+deviceName+".")
 	inputHidden("Press Enter to return to the main menu.")
 
-def generateGameRomDict():
+def generateGameRomDict(currSystemDAT):
 	global gameRomDict
 	global newGameRomDict
+	global allGameFields
 	gameRomDict = {}
 	systemFolder = path.join(mainRomFolder, systemName)
-	currSystemDAT = path.join(noIntroDir, systemName+".dat")
 	tree = ET.parse(currSystemDAT)
 	root = tree.getroot()
 	allGameFields = root[1:]
@@ -610,6 +668,8 @@ def keepAttribute(att):
 	for specialCategory in mainConfig["Special ROM Attributes (Advanced)"]:
 		if att in mainConfig["Special ROM Attributes (Advanced)"][specialCategory]:
 			return False
+	if "Virtual Console" in att:
+		return False
 	try:
 		dateParse(att, False)
 		return False
@@ -683,6 +743,8 @@ def getScore(rom):
 				score -= 89
 		if "Collection" in att:
 			score -= 10
+		if "DLC" in att:
+			score -= 9
 		if att in sources:
 			score -= 10
 	return score
@@ -718,7 +780,7 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 		tempSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		return tempSecondGameName, True
 
-def copyMainRomset(romsetCategory):
+def copyMainRomset(romsetCategory, isRedump):
 	global gameRomDict
 	print("\nCopying main romset for "+systemName+".")
 	currSystemSourceFolder = path.join(mainRomFolder, systemName)
@@ -744,7 +806,16 @@ def copyMainRomset(romsetCategory):
 				currGameFolder = path.join(currGameFolder, "[Unreleased]")
 			for folder in currSpecialFolders:
 				currGameFolder = path.join(currGameFolder, "["+folder+"]")
-			if "(Sample" in bestRom or "(Demo" in bestRom:
+			if isRedump:
+				redumpCategory = "Games"
+				currRomName = path.splitext(gameRomDict[0])[0] # Redump doesn't have clones, so each game only has one rom
+				for gameField in allGameFields:
+					if gameField.get("name") == currRomName:
+						redumpCategory = gameField.find("category").text
+						break
+				if redumpCategory != "Games":
+					currGameFolder = path.join(currGameFolder, "["+redumpCategory+"]")
+			elif "(Sample" in bestRom or "(Demo" in bestRom:
 				currGameFolder = path.join(currGameFolder, "[Demos]")
 			currGameFolder = path.join(currGameFolder, game)
 			if romsetCategory == "Full":
@@ -958,6 +1029,8 @@ def printHelp():
 	print(limitedString("Updates the names of misnamed roms (and the ZIP files containing them, if applicable) according to the rom's entry in the No-Intro Parent/Clone DAT. This is determined by the rom's matching hash code in the DAT, so the original name doesn't matter.",
 		80, "- ", "  "))
 	print(limitedString("For each system, creates a log file indicating which roms exist in the romset, which roms are missing, and which roms are in the set that don't match anything from the DAT.",
+		80, "- ", "  "))
+	print(limitedString("Note: Only systems with a No-Intro database can have their rom names updated, as disc-based systems often use a compression method that changes the file's hash, making hash verification impossible.",
 		80, "- ", "  "))
 	print("\nCreate new device profile")
 	print(limitedString("Create a new device profile. This is a text file that indicates the following:",
