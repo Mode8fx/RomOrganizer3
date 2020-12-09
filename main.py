@@ -13,6 +13,7 @@ from gatelib import *
 from filehash import FileHash
 import configparser
 from dateutil.parser import parse as dateParse
+from tqdm import tqdm #, trange
 
 progFolder = getCurrFolder()
 sys.path.append(progFolder)
@@ -58,7 +59,7 @@ def main():
 		elif choice == 4:
 			setSecondaryRomFolder()
 		elif choice == 5:
-			exportRomsets()
+			mainExport()
 		elif choice == 6:
 			printHelp()
 		else:
@@ -293,7 +294,7 @@ def createMainConfig():
 		"Namco Museum Archives", "Kiosk", "iQue", "Sega Channel", "WiiWare",
 		"DLC", "Minis", "Promo", "Nintendo Channel", "Nintendo Channel, Alt",
 		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn",
-		"Undumped Japanese Download Station"
+		"Undumped Japanese Download Station", "WiiWare Broadcast"
 		])
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
@@ -460,8 +461,8 @@ def verifyMainRomFolder():
 # EXPORT #
 ##########
 
-def exportRomsets():
-	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, systemName, outputFolder
+def mainExport():
+	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, deviceName, systemName, outputFolder
 	initScreen()
 	if not verifyMainRomFolder():
 		return
@@ -525,9 +526,9 @@ def generateGameRomDict():
 			if game.get("name") == romName:
 				parent = game.get("cloneof")
 				if parent is None:
-					addGameAndRomToDict(romName, romName)
+					addGameAndRomToDict(romName, file)
 				else:
-					addGameAndRomToDict(parent, romName)
+					addGameAndRomToDict(parent, file)
 				break
 	# Rename gameRomDict keys according to best game name
 	newGameRomDict = {}
@@ -558,7 +559,7 @@ def addGameAndRomToDict(game, rom):
 
 def getBestGameName(roms):
 	bestRom, _ = getBestRom(roms)
-	atts = getAttributeSplit(bestRom)
+	atts = getAttributeSplit(path.splitext(bestRom)[0])
 	bestGameName = atts[0]
 	if len(atts) == 1:
 		return bestGameName
@@ -590,7 +591,7 @@ def keepAttribute(att):
 def getBestRom(roms):
 	romsInBestRegion, _, bestRegion = getRomsInBestRegion(roms)
 	if len(romsInBestRegion) == 1:
-		return romsInBestRegion[0]
+		return romsInBestRegion[0], bestRegion
 	bestScore = -500
 	bestRom = ""
 	for rom in romsInBestRegion:
@@ -691,33 +692,69 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 
 def copyRomset(romsetCategory):
 	global gameRomDict
+	print("\nCopying romset for "+systemName+".")
 	currSystemSourceFolder = path.join(mainRomFolder, systemName)
 	currSystemTargetFolder = path.join(outputFolder, systemName)
-	for game in gameRomDict.keys():
-		currSpecialFolders = getSpecialFoldersForGame(game)
-		if arrayOverlap(currSpecialFolders, deviceConfig["Special Categories"]["Ignored Folders"].split("|")):
-			continue
-		currGameFolder = currSystemTargetFolder
-		# TODO: Append region to currGameFolder if it is not primary
-		bestRom, bestRegion = getBestRom(gameRomDict[game])
-		bestRegionIsPrimary = bestRegion in deviceConfig["Special Categories"]["Primary Regions"].split("|")
-		if not bestRegionIsPrimary:
-			currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
-		for folder in currSpecialFolders:
-			currGameFolder = path.join(currGameFolder, "["+folder+"]")
-		if romsetCategory == "Full":
-			for rom in gameRomDict[game]:
-				sourceRomPath = path.join(currSystemSourceFolder, rom)
-				createDir(currGameFolder)
-				targetRomPath = path.join(currGameFolder, rom)
-				if not path.exists(targetRomPath):
-					shutil.copy(sourceRomPath, targetRomPath)
-		else:
-			if romsetCategory == "1G1R" or bestRegionIsPrimary:
+	numGames = len(gameRomDict.keys())
+	romsCopied = []
+	romsSkipped = []
+	romsFailed = []
+	with tqdm(total=numGames) as progressBar:
+		for game in gameRomDict.keys():
+			currSpecialFolders = getSpecialFoldersForGame(game)
+			if arrayOverlap(currSpecialFolders, deviceConfig["Special Categories"]["Ignored Folders"].split("|")):
+				progressBar.update(1)
+				continue
+			currGameFolder = currSystemTargetFolder
+			bestRom, bestRegion = getBestRom(gameRomDict[game])
+			bestRegionIsPrimary = bestRegion in deviceConfig["Special Categories"]["Primary Regions"].split("|")
+			if not bestRegionIsPrimary:
+				currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
+			if "(Unl" in bestRom:
+				currGameFolder = path.join(currGameFolder, "[Unlicensed]")
+			if "(Proto" in bestRom:
+				currGameFolder = path.join(currGameFolder, "[Unreleased]")
+			for folder in currSpecialFolders:
+				currGameFolder = path.join(currGameFolder, "["+folder+"]")
+			if "(Sample" in bestRom or "(Demo" in bestRom:
+				currGameFolder = path.join(currGameFolder, "[Demos]")
+			currGameFolder = path.join(currGameFolder, game)
+			if romsetCategory == "Full":
+				for rom in gameRomDict[game]:
+					sourceRomPath = path.join(currSystemSourceFolder, rom)
+					targetRomPath = path.join(currGameFolder, rom)
+					if not path.exists(targetRomPath):
+						try:
+							createdFolder = createDir(currGameFolder)
+							shutil.copy(sourceRomPath, targetRomPath)
+							romsCopied.append(rom)
+						except:
+							# print("\nFailed to copy: "+rom)
+							if createdFolder and len(listdir(createdFolder)) == 0:
+								rmdir(createdFolder)
+							romsFailed.append(rom)
+					else:
+						romsSkipped.append(rom)
+			elif romsetCategory == "1G1R" or bestRegionIsPrimary:
 				sourceRomPath = path.join(currSystemSourceFolder, bestRom)
 				targetRomPath = path.join(currGameFolder, bestRom)
-				createDir(currGameFolder)
-				shutil.copy(sourceRomPath, targetRomPath)
+				if not path.exists(targetRomPath):
+					try:
+						createdFolder = createDir(currGameFolder)
+						shutil.copy(sourceRomPath, targetRomPath)
+						romsCopied.append(bestRom)
+					except:
+						# print("\nFailed to copy: "+bestRom)
+						if createdFolder and len(listdir(createdFolder)) == 0:
+							rmdir(createdFolder)
+						romsFailed.append(bestRom)
+				else:
+					romsSkipped.append(bestRom)
+			progressBar.update(1)
+	createMainCopiedLog(romsCopied, romsFailed)
+	print("Copied "+str(len(romsCopied))+" new roms.")
+	print("Skipped "+str(len(romsSkipped))+" roms that already exist on this device.")
+	print("Failed to copy "+str(len(romsFailed))+" new roms.")
 
 def getSpecialFoldersForGame(game):
 	currSpecialFolders = []
@@ -727,6 +764,20 @@ def getSpecialFoldersForGame(game):
 				currSpecialFolders.append(folder)
 				break
 	return currSpecialFolders
+
+def createMainCopiedLog(romsCopied, romsFailed):
+	if len(romsCopied) + len(romsFailed) > 0:
+		romsCopied.sort()
+		romsFailed.sort()
+		romsetLogFile = open(path.join(logFolder, "Log - Romset (to "+deviceName+") - "+systemName+".txt"), "w", encoding="utf-8", errors="replace")
+		romsetLogFile.writelines("=== Copied "+str(len(romsCopied))+" new ROMs from "+systemName+" to "+deviceName+" ===\n\n")
+		for file in romsCopied:
+			romsetLogFile.writelines(file+"\n")
+		if len(romsFailed) > 0:
+			romsetLogFile.writelines("\n= FAILED TO COPY =\n")
+			for file in romsFailed:
+				romsetLogFile.writelines(file+"\n")
+		romsetLogFile.close()
 
 #########################
 # GLOBAL HELPER METHODS #

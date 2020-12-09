@@ -360,16 +360,21 @@ def getPathArray(p):
 	----------
 	p : str
 		The path of the folder that will be created.
+
+	Returns
+	-------
+	True if the folder was created, False if it already exists.
 """
 def createDir(p):
 	if path.isdir(p):
-		return
+		return False
 	pathArray = getPathArray(p)
 	currPath = pathArray[0]
 	for i in range(1, len(pathArray)):
 		currPath = path.join(currPath, pathArray[i])
 		if not path.isdir(currPath):
 			mkdir(currPath)
+	return True
 
 """
 	Returns the directory containing the current program, regardless of whether it is a standalone script or a wrapped executable.
