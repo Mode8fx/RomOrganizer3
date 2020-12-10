@@ -19,8 +19,8 @@ import binascii
 """
 TODO:
 
-- Optimize export process using gameNameToCRC and crcToGameName
 - Test export process
+- Finalize readme (point out all the features!)
 - Wrap into an executable
 """
 
@@ -87,7 +87,7 @@ def main():
 ####################
 
 def updateAndAuditVerifiedRomsets():
-	global allGameNamesInDAT, romsWithoutCRCMatch
+	global allGameNamesInDAT, romsWithoutCRCMatch, progressBar
 	initScreen()
 	currRomsetFolder = askForDirectory("Select the ROM directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
 	if currRomsetFolder == "":
@@ -98,7 +98,7 @@ def updateAndAuditVerifiedRomsets():
 		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
 			continue
-		print("====================\n"+currSystemName)
+		print("\n====================\n\n"+currSystemName+"\n")
 		isNoIntro = True
 		currSystemDAT = path.join(noIntroDir, currSystemName+".dat")
 		if not path.exists(currSystemDAT):
@@ -115,7 +115,7 @@ def updateAndAuditVerifiedRomsets():
 		tree = ET.parse(currSystemDAT)
 		treeRoot = tree.getroot()
 		allGameFields = treeRoot[1:]
-		gameNameToCRC = {}
+		# gameNameToCRC = {}
 		crcToGameName = {}
 		allGameNames = []
 		for game in allGameFields:
@@ -125,7 +125,7 @@ def updateAndAuditVerifiedRomsets():
 				gameCRC = game.find("rom").get("crc").upper()
 			except:
 				gameCRC = None
-			gameNameToCRC[gameName] = gameCRC
+			# gameNameToCRC[gameName] = gameCRC
 			if gameCRC not in crcToGameName.keys():
 				crcToGameName[gameCRC] = []
 			crcToGameName[gameCRC].append(gameName)
@@ -142,19 +142,20 @@ def updateAndAuditVerifiedRomsets():
 		for root, dirs, files in walk(currSystemFolder):
 			for file in files:
 				numFiles += 1
-		with tqdm(total=numFiles) as progressBar:
-			for root, dirs, files in walk(currSystemFolder):
-				for file in files:
-					progressBar.update(1)
-					foundMatch = renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameNames)
-			xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
-			xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
-			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName)
-			numNoCRC = len(romsWithoutCRCMatch)
-			if numNoCRC > 0:
-				print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
-				print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
-					80, "", ""))
+		progressBar = tqdm(total=numFiles, ncols=80)
+		for root, dirs, files in walk(currSystemFolder):
+			for file in files:
+				progressBar.update(1)
+				foundMatch = renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameNames)
+		progressBar.close()
+		xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
+		xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
+		createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName)
+		numNoCRC = len(romsWithoutCRCMatch)
+		if numNoCRC > 0:
+			print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
+			print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
+				80, "", ""))
 
 	inputHidden("\nDone. Press Enter to continue.")
 
@@ -191,7 +192,7 @@ def renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameN
 	if isNoIntro:
 		currFileCRC = getCRC(currFilePath, headerLength)
 		if not currFileCRC:
-			print(file+" archive contains more than one file. Skipping.")
+			progressBar.write(file+" archive contains more than one file. Skipping.")
 			romsWithoutCRCMatch.append(file)
 			return
 		matchingGameNames = crcToGameName.get(currFileCRC)
@@ -221,7 +222,7 @@ def renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameN
 							break
 						i += 1
 					renameGame(currFilePath, duplicateName, currFileExt)
-					print("Duplicate found and renamed: "+duplicateName)
+					progressBar.write("Duplicate found and renamed: "+duplicateName)
 			else:
 				allGameNamesInDAT[currFileName] = True
 			foundMatch = True
@@ -237,7 +238,7 @@ def renameGame(filePath, newName, fileExt):
 		renameArchiveAndContent(filePath, newName)
 	else:
 		rename(filePath, path.join(path.dirname(filePath), newName+fileExt))
-		print("Renamed "+path.splitext(path.basename(filePath))[0]+" to "+newName)
+		progressBar.write("Renamed "+path.splitext(path.basename(filePath))[0]+" to "+newName)
 
 def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName):
 	xmlRomsInSet.sort()
@@ -268,7 +269,7 @@ def renameArchiveAndContent(archivePath, newName):
 	with zipfile.ZipFile(archivePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
 		zippedFiles = zippedFile.namelist()
 		if len(zippedFiles) > 1:
-			print("This archive contains more than one file. Skipping.")
+			progressBar.write("This archive contains more than one file. Skipping.")
 			return
 		fileExt = path.splitext(zippedFiles[0])[1]
 		archiveExt = path.splitext(archivePath)[1]
@@ -281,7 +282,7 @@ def renameArchiveAndContent(archivePath, newName):
 	with zipfile.ZipFile(newArchivePath, 'w', zipfile.ZIP_DEFLATED) as newZip:
 		newZip.write(newExtractedFilePath, arcname='\\'+newName+fileExt)
 	remove(newExtractedFilePath)
-	print("Renamed "+path.splitext(path.basename(archivePath))[0]+" to "+newName)
+	progressBar.write("Renamed "+path.splitext(path.basename(archivePath))[0]+" to "+newName)
 
 ############################
 # CONFIG / DEVICE PROFILES #
@@ -604,7 +605,7 @@ def mainExport():
 	initScreen()
 	for sc in systemChoices:
 		systemName = currProfileMainDirs[sc-1]
-		print("\n"+systemName)
+		print("\n====================\n\n"+systemName+"\n")
 		romsetCategory = deviceConfig["Main Romsets"][systemName]
 		isRedump = False
 		currSystemDAT = path.join(noIntroDir, systemName+".dat")
@@ -644,21 +645,27 @@ def generateGameRomDict(currSystemDAT):
 	gameRomDict = {}
 	systemFolder = path.join(mainRomFolder, systemName)
 	tree = ET.parse(currSystemDAT)
-	root = tree.getroot()
-	allGameFields = root[1:]
+	treeRoot = tree.getroot()
+	allGameFields = treeRoot[1:]
+	gameNameToCloneOf = {}
+	for game in allGameFields:
+		gameName = game.get("name")
+		try:
+			gameCloneOf = game.get("cloneof")
+		except:
+			gameCloneOf = None
+		gameNameToCloneOf[gameName] = gameCloneOf
 	for file in listdir(systemFolder):
 		_, _, currRegion = getRomsInBestRegion([path.splitext(file)[0]])
 		if currRegion in ignoredFolders:
 			continue
 		romName = path.splitext(file)[0]
-		for game in allGameFields:
-			if game.get("name") == romName:
-				parent = game.get("cloneof")
-				if parent is None:
-					addGameAndRomToDict(romName, file)
-				else:
-					addGameAndRomToDict(parent, file)
-				break
+		if romName in gameNameToCloneOf:
+			parent = gameNameToCloneOf[romName]
+			if parent is None:
+				addGameAndRomToDict(romName, file)
+			else:
+				addGameAndRomToDict(parent, file)
 	# Rename gameRomDict keys according to best game name
 	newGameRomDict = {}
 	for game in gameRomDict.keys():
@@ -824,7 +831,7 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 		return tempSecondGameName, True
 
 def copyMainRomset(romsetCategory, isRedump):
-	global gameRomDict
+	global gameRomDict, progressBar
 	print("\nCopying main romset for "+systemName+".")
 	currSystemSourceFolder = path.join(mainRomFolder, systemName)
 	currSystemTargetFolder = path.join(outputFolder, systemName)
@@ -832,67 +839,68 @@ def copyMainRomset(romsetCategory, isRedump):
 	romsCopied = []
 	numRomsSkipped = 0
 	romsFailed = []
-	with tqdm(total=numGames) as progressBar:
-		for game in gameRomDict.keys():
-			currSpecialFolders = getSpecialFoldersForGame(game)
-			if arrayOverlap(currSpecialFolders, ignoredFolders):
-				progressBar.update(1)
-				continue
-			currGameFolder = currSystemTargetFolder
-			bestRom, bestRegion = getBestRom(gameRomDict[game])
-			bestRegionIsPrimary = bestRegion in primaryRegions
-			if not bestRegionIsPrimary:
-				currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
-			if "(Unl" in bestRom:
-				currGameFolder = path.join(currGameFolder, "[Unlicensed]")
-			if "(Proto" in bestRom:
-				currGameFolder = path.join(currGameFolder, "[Unreleased]")
-			for folder in currSpecialFolders:
-				currGameFolder = path.join(currGameFolder, "["+folder+"]")
-			if isRedump:
-				redumpCategory = "Games"
-				currRomName = path.splitext(gameRomDict[0])[0] # Redump doesn't have clones, so each game only has one rom
-				for gameField in allGameFields:
-					if gameField.get("name") == currRomName:
-						redumpCategory = gameField.find("category").text
-						break
-				if redumpCategory != "Games":
-					currGameFolder = path.join(currGameFolder, "["+redumpCategory+"]")
-			elif "(Sample" in bestRom or "(Demo" in bestRom:
-				currGameFolder = path.join(currGameFolder, "[Demos]")
-			currGameFolder = path.join(currGameFolder, game)
-			if romsetCategory == "Full":
-				for rom in gameRomDict[game]:
-					sourceRomPath = path.join(currSystemSourceFolder, rom)
-					targetRomPath = path.join(currGameFolder, rom)
-					if not path.exists(targetRomPath):
-						try:
-							createdFolder = createDir(currGameFolder)
-							shutil.copy(sourceRomPath, targetRomPath)
-							romsCopied.append(rom)
-						except:
-							# print("\nFailed to copy: "+rom)
-							if createdFolder and len(listdir(createdFolder)) == 0:
-								rmdir(createdFolder)
-							romsFailed.append(rom)
-					else:
-						numRomsSkipped += 1
-			elif romsetCategory == "1G1R" or bestRegionIsPrimary:
-				sourceRomPath = path.join(currSystemSourceFolder, bestRom)
-				targetRomPath = path.join(currGameFolder, bestRom)
-				if not path.isfile(targetRomPath):
+	progressBar = tqdm(total=numGames, ncols=80)
+	for game in gameRomDict.keys():
+		currSpecialFolders = getSpecialFoldersForGame(game)
+		if arrayOverlap(currSpecialFolders, ignoredFolders):
+			progressBar.update(1)
+			continue
+		currGameFolder = currSystemTargetFolder
+		bestRom, bestRegion = getBestRom(gameRomDict[game])
+		bestRegionIsPrimary = bestRegion in primaryRegions
+		if not bestRegionIsPrimary:
+			currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
+		if "(Unl" in bestRom:
+			currGameFolder = path.join(currGameFolder, "[Unlicensed]")
+		if "(Proto" in bestRom:
+			currGameFolder = path.join(currGameFolder, "[Unreleased]")
+		for folder in currSpecialFolders:
+			currGameFolder = path.join(currGameFolder, "["+folder+"]")
+		if isRedump:
+			redumpCategory = "Games"
+			currRomName = path.splitext(gameRomDict[0])[0] # Redump doesn't have clones, so each game only has one rom
+			for gameField in allGameFields:
+				if gameField.get("name") == currRomName:
+					redumpCategory = gameField.find("category").text
+					break
+			if redumpCategory != "Games":
+				currGameFolder = path.join(currGameFolder, "["+redumpCategory+"]")
+		elif "(Sample" in bestRom or "(Demo" in bestRom:
+			currGameFolder = path.join(currGameFolder, "[Demos]")
+		currGameFolder = path.join(currGameFolder, game)
+		if romsetCategory == "Full":
+			for rom in gameRomDict[game]:
+				sourceRomPath = path.join(currSystemSourceFolder, rom)
+				targetRomPath = path.join(currGameFolder, rom)
+				if not path.exists(targetRomPath):
 					try:
 						createdFolder = createDir(currGameFolder)
 						shutil.copy(sourceRomPath, targetRomPath)
-						romsCopied.append(bestRom)
+						romsCopied.append(rom)
 					except:
-						# print("\nFailed to copy: "+bestRom)
+						# progressBar.write("\nFailed to copy: "+rom)
 						if createdFolder and len(listdir(createdFolder)) == 0:
 							rmdir(createdFolder)
-						romsFailed.append(bestRom)
+						romsFailed.append(rom)
 				else:
 					numRomsSkipped += 1
-			progressBar.update(1)
+		elif romsetCategory == "1G1R" or bestRegionIsPrimary:
+			sourceRomPath = path.join(currSystemSourceFolder, bestRom)
+			targetRomPath = path.join(currGameFolder, bestRom)
+			if not path.isfile(targetRomPath):
+				try:
+					createdFolder = createDir(currGameFolder)
+					shutil.copy(sourceRomPath, targetRomPath)
+					romsCopied.append(bestRom)
+				except:
+					# progressBar.write("\nFailed to copy: "+bestRom)
+					if createdFolder and len(listdir(createdFolder)) == 0:
+						rmdir(createdFolder)
+					romsFailed.append(bestRom)
+			else:
+				numRomsSkipped += 1
+		progressBar.update(1)
+	progressBar.close()
 	createMainCopiedLog(romsCopied, romsFailed)
 	print("Copied "+str(len(romsCopied))+" new roms.")
 	print("Skipped "+str(numRomsSkipped)+" roms that already exist on this device.")
@@ -932,29 +940,30 @@ def copySecondaryRomset():
 	filesCopied = []
 	numFilesSkipped = 0
 	filesFailed = []
-	with tqdm(total=numFiles) as progressBar:
-		for root, dirs, files in walk(currSystemSourceFolder):
-			for fileName in files:
-				currRoot = root.split(currSystemSourceFolder)[1][1:]
-				oldFileDirPathArray = getPathArray(root)
-				if arrayOverlap(ignoredFolders, oldFileDirPathArray):
-					continue
-				sourceRomPath = path.join(root, fileName)
-				targetRomDir = path.join(currSystemTargetFolder, currRoot)
-				targetRomPath = path.join(targetRomDir, fileName)
-				if not path.isfile(targetRomPath):
-					try:
-						createdFolder = createDir(targetRomDir)
-						shutil.copy(sourceRomPath, targetRomPath)
-						filesCopied.append(targetRomPath)
-					except:
-						# print("\nFailed to copy: "+sourceRomPath)
-						if createdFolder and listdir(targetRomDir) == 0:
-							rmdir(targetRomDir)
-						filesFailed.append(sourceRomPath)
-				else:
-					numFilesSkipped += 1
-				progressBar.update(1)
+	progressBar = tqdm(total=numFiles, ncols=80)
+	for root, dirs, files in walk(currSystemSourceFolder):
+		for fileName in files:
+			currRoot = root.split(currSystemSourceFolder)[1][1:]
+			oldFileDirPathArray = getPathArray(root)
+			if arrayOverlap(ignoredFolders, oldFileDirPathArray):
+				continue
+			sourceRomPath = path.join(root, fileName)
+			targetRomDir = path.join(currSystemTargetFolder, currRoot)
+			targetRomPath = path.join(targetRomDir, fileName)
+			if not path.isfile(targetRomPath):
+				try:
+					createdFolder = createDir(targetRomDir)
+					shutil.copy(sourceRomPath, targetRomPath)
+					filesCopied.append(targetRomPath)
+				except:
+					# print("\nFailed to copy: "+sourceRomPath)
+					if createdFolder and listdir(targetRomDir) == 0:
+						rmdir(targetRomDir)
+					filesFailed.append(sourceRomPath)
+			else:
+				numFilesSkipped += 1
+			progressBar.update(1)
+	progressBar.close()
 	createSecondaryCopiedLog(filesCopied, filesFailed)
 	print("Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+".")
 	print("Skipped "+str(numFilesSkipped)+pluralize(" file", numFilesSkipped)+" that already exist on this device.")
