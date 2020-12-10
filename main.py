@@ -19,7 +19,8 @@ import binascii
 """
 TODO:
 
-- Test export process
+- Finish testing export process
+- Add export audit
 - Finalize readme (point out all the features!)
 - Wrap into an executable
 """
@@ -326,7 +327,7 @@ def createMainConfig():
 	mainConfig.set('Regions', '# For example, any ROM with (World), (USA), or (U) in its name will be exported to a [USA] folder')
 	mainConfig.set('Regions', '# Additionally, you may set at least one region as primary (see device profiles). Primary regions do not have a subfolder, and are instead exported to the system\'s root folder.')
 	mainConfig.set('Regions', '# Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and Fr tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe category above the USA category. You may also create your own region categories.')
-	mainConfig.set('Regions', '# Finally, the category with :DEFAULT: (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions. Keep it as the last possible region tag.')
+	mainConfig.set('Regions', '# Finally, the last category (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions.')
 	mainConfig.set('Regions', '###')
 	mainConfig["Regions"]["Test Program"] = "|".join([
 		"Test Program"
@@ -697,7 +698,7 @@ def addGameAndRomToDict(game, rom):
 
 def getBestGameName(roms):
 	bestRom, _ = getBestRom(roms)
-	atts = getAttributeSplit(path.splitext(bestRom)[0])
+	atts = getAttributeSplit(bestRom)
 	bestGameName = atts[0]
 	if len(atts) == 1:
 		return bestGameName
@@ -745,25 +746,20 @@ def getRomsInBestRegion(roms):
 	romsInBestRegion = []
 	bestRegionIndex = 99
 	bestRegion = None
+	numRegionTypes = len(mainConfig["Regions"])
 	for rom in roms:
 		attributeSplit = getAttributeSplit(rom)
-		i = 0
-		foundRegion = False
-		for region in mainConfig["Regions"]:
-			for regionAtt in barSplit(mainConfig["Regions"][region]):
-				if regionAtt in attributeSplit or regionAtt == ":DEFAULT:":
-					if i < bestRegionIndex:
-						bestRegionIndex = i
-						romsInBestRegion = [rom]
-					elif i == bestRegionIndex:
-						romsInBestRegion.append(rom)
+		for i in range(numRegionTypes):
+			region = list(mainConfig["Regions"].keys())[i]
+			currRegionAtts = barSplit(mainConfig["Regions"][region])
+			if arrayOverlap(attributeSplit, currRegionAtts) or i==numRegionTypes-1:
+				if i < bestRegionIndex:
+					bestRegionIndex = i
+					romsInBestRegion = [rom]
 					bestRegion = region
-					foundRegion = True
-				if foundRegion:
-					break
-			if foundRegion:
+				elif i == bestRegionIndex:
+					romsInBestRegion.append(rom)
 				break
-			i += 1
 	return romsInBestRegion, bestRegionIndex, bestRegion
 
 def getScore(rom):
@@ -802,7 +798,7 @@ def getScore(rom):
 	return score
 
 def getAttributeSplit(name):
-	mna = [s.strip() for s in re.split('\(|\)', name) if s.strip() != ""]
+	mna = [s.strip() for s in re.split('\(|\)', path.splitext(name)[0]) if s.strip() != ""]
 	mergeNameArray = []
 	mergeNameArray.append(mna[0])
 	if len(mna) > 1:
