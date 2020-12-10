@@ -163,7 +163,9 @@ def updateAndAuditVerifiedRomsets():
 			# Fix files renamed to (copy)
 			if isNoIntro:
 				copies = getCopies(currSystemFolder)
-				for currFilePath in copies:
+				if len(copies) > 0:
+					print("Fixing possible duplicates...")
+				for currFilePath in copies[:]:
 					root, file = path.split(currFilePath)
 					currFileName, currFileExt = path.splitext(file)
 					currFileCRC = getCRC(currFilePath, headerLength)
@@ -173,10 +175,9 @@ def updateAndAuditVerifiedRomsets():
 						except:
 							currDBGameCRC = None
 						currDBGameName = game.get("name")
-						if currDBGameCRC == currFileCRC and not path.exists(root, currDBGameName+currFileExt):
+						if currDBGameCRC == currFileCRC and not path.exists(path.join(root, currDBGameName+currFileExt)):
 							allGameNamesInDAT[currDBGameName] = True
 							renamingProcess(currFileName, currDBGameName, root, currFileExt, currFilePath, headerLength, currDBGameCRC)
-
 			xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
 			xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
 			copies = getCopies(currSystemFolder)
@@ -238,7 +239,7 @@ def getCopies(currSystemFolder):
 	copies = []
 	for root, dirs, files in walk(currSystemFolder):
 		for file in files:
-			if " (copy) (" in file:
+			if " (copy) (" in file or " (no match)" in file:
 				copies.append(path.join(root, file))
 	return copies
 
