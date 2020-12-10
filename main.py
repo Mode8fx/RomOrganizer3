@@ -314,18 +314,26 @@ def createMainConfig():
 	mainConfig.optionxform = str
 	# ROM Folders
 	mainConfig["ROM Folders"] = {}
-	mainConfig.set('ROM Folders', '# The directory of the main ROM folder you want to export from, which contains system folders that contain No-Intro verified ROMs. If you leave this blank, the program will ask for this folder when you try to export romsets.')
+	mainConfig.set('ROM Folders', limitedString("The directory of the main ROM folder you want to export from, which contains system folders that contain No-Intro verified ROMs. If you leave this blank, the program will ask for this folder when you try to export romsets.",
+		100, "# ", "#    "))
+	mainConfig.set('ROM Folders', '###')
 	mainConfig["ROM Folders"]["Main ROM Folder"] = ""
-	mainConfig.set('ROM Folders', '# The directory of the secondary ROM folder you want to export from, which contains system folders that can contain unverified ROMs/other files (this is intended for rom hacks, homebrew, etc). If you leave this blank, the program will ask for this folder when you try to export the secondary folder.')
+	mainConfig.set('ROM Folders', limitedString("The directory of the secondary ROM folder you want to export from, which contains system folders that can contain unverified ROMs/other files (this is intended for rom hacks, homebrew, etc). If you leave this blank, the program will ask for this folder when you try to export the secondary folder.",
+		100, "# ", "#    "))
 	mainConfig.set('ROM Folders', '###')
 	mainConfig["ROM Folders"]["Secondary ROM Folder"] = ""
 	# Regions
 	mainConfig["Regions"] = {}
-	mainConfig.set('Regions', '# The region folder for each ROM is determined by its region/language tag as listed below.')
-	mainConfig.set('Regions', '# For example, any ROM with (World), (USA), or (U) in its name will be exported to a [USA] folder')
-	mainConfig.set('Regions', '# Additionally, you may set at least one region as primary (see device profiles). Primary regions do not have a subfolder, and are instead exported to the system\'s root folder.')
-	mainConfig.set('Regions', '# Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and Fr tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe category above the USA category. You may also create your own region categories.')
-	mainConfig.set('Regions', '# Finally, the last category (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions.')
+	mainConfig.set('Regions', limitedString("The region folder for each ROM is determined by its region/language tag as listed below.",
+		100, "# ", "#    "))
+	mainConfig.set('Regions', limitedString("For example, any ROM with (World), (USA), or (U) in its name will be exported to a [USA] folder.",
+		100, "# ", "#    "))
+	mainConfig.set('Regions', limitedString("Additionally, you may set at least one region as primary (see device profiles). Primary regions do not have a subfolder, and are instead exported to the system\'s root folder.",
+		100, "# ", "#    "))
+	mainConfig.set('Regions', limitedString("Regions are listed in order of descending priority, so (to use the default example) if a ROM has both the USA and Fr tags, it will be considered a [USA] ROM. If you want to prioritize Europe over USA, simply move the Europe category above the USA category. You may also create your own region categories.",
+		100, "# ", "#    "))
+	mainConfig.set('Regions', limitedString("Finally, the last category (Other (non-English)) is the fallback in the event that a ROM doesn\'t belong in any of the preceding regions.",
+		100, "# ", "#    "))
 	mainConfig.set('Regions', '###')
 	mainConfig["Regions"]["Test Program"] = "|".join([
 		"Test Program"
@@ -346,15 +354,20 @@ def createMainConfig():
 		"F", "France", "Fr", "G", "Germany", "De", "S", "Spain", "Es", "I", "Italy",
 		"It", "No", "Norway", "Br", "Brazil", "Sw", "Sweden", "Cn", "China", "Zh", "K",
 		"Korea", "Ko", "As", "Asia", "Ne", "Netherlands", "Ru", "Russia", "Da",
-		"Denmark", "Nl", "Pt", "Sv", "No", "Da", "Fi", "Pl", ":DEFAULT:"
+		"Denmark", "Nl", "Pt", "Sv", "No", "Da", "Fi", "Pl"
 	])
 	# Special Folders
 	mainConfig["Special Folders"] = {}
-	mainConfig.set('Special Folders', '# Special Folders are folders that are created on your device upon export for verified ROMs with filesnames that start with certain strings.')
-	mainConfig.set('Special Folders', '# For example, any ROM whose name starts with \"2 Games in 1 - \" will be exported to a subfolder called \"Compilation\".')
-	mainConfig.set('Special Folders', '# You could then choose to ignore any ROMs marked as \"Compilation\" when exporting to a specific device (see device profiles).')
-	mainConfig.set('Special Folders', '# Feel free to add additional Special Folders (or add to existing folders) using the format below (with \"|\" as a delimiter).')
-	mainConfig.set('Special Folders', '# Special Folders are created in order of descending priority, so (to use the default example) if a ROM is in both \"Compilation\" and \"GBA Video\", it will be added to the folder \"SYSTEM/REGION/Compilation/GBA Video/GAME\".')
+	mainConfig.set('Special Folders', limitedString("Special Folders are folders that are created on your device upon export for verified ROMs with filesnames that start with certain strings.",
+		100, "# ", "#    "))
+	mainConfig.set('Special Folders', limitedString("For example, any ROM whose name starts with \"2 Games in 1 - \" will be exported to a subfolder called \"Compilation\".",
+		100, "# ", "#    "))
+	mainConfig.set('Special Folders', limitedString("You could then choose to ignore any ROMs marked as \"Compilation\" when exporting to a specific device (see device profiles).",
+		100, "# ", "#    "))
+	mainConfig.set('Special Folders', limitedString("Feel free to add additional Special Folders (or add to existing folders) using the format below (with \"|\" as a delimiter).",
+		100, "# ", "#    "))
+	mainConfig.set('Special Folders', limitedString("Special Folders are created in order of descending priority, so (to use the default example) if a ROM is in both \"Compilation\" and \"GBA Video\", it will be added to the folder \"SYSTEM/REGION/Compilation/GBA Video/GAME\".",
+		100, "# ", "#    "))
 	mainConfig.set('Special Folders', '###')
 	mainConfig["Special Folders"]["Compilation"] = "|".join([
 		"2 Games in 1 -", "2 Games in 1! -", "2 Disney Games -", "2-in-1 Fun Pack -",
@@ -374,8 +387,10 @@ def createMainConfig():
 		])
 	# Special ROM Attributes
 	mainConfig["Special ROM Attributes (Advanced)"] = {}
-	mainConfig.set('Special ROM Attributes (Advanced)', '# Special ROM Attributes are substrings in verified ROM names (specifically, the parentheses fields in these names) that are ignored when trying to determine the best name for a game.')
-	mainConfig.set('Special ROM Attributes (Advanced)', '# \"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).')
+	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("Special ROM Attributes are substrings in verified ROM names (specifically, the parentheses fields in these names) that are ignored when trying to determine the best name for a game.",
+		100, "# ", "#    "))
+	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("\"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).",
+		100, "# ", "#    "))
 	mainConfig.set('Special ROM Attributes (Advanced)', '###')
 	mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
 		"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
@@ -392,8 +407,11 @@ def createMainConfig():
 		])
 	# System Header Sizes
 	mainConfig["System Header Sizes (Advanced)"] = {}
-	mainConfig.set('System Header Sizes (Advanced)', '# The size (in bytes) of each system\'s header (0 by default). This is used when comparing a game\'s CRC hash to its system database.')
-	mainConfig.set('System Header Sizes (Advanced)', '# Each system name should match the "name" field in the DAT file\'s header.')
+	mainConfig.set('System Header Sizes (Advanced)', limitedString("The size (in bytes) of each system\'s header (0 by default). This is used when comparing a game\'s CRC hash to its system database.",
+		100, "# ", "#    "))
+	mainConfig.set('System Header Sizes (Advanced)', limitedString("Each system name should match the \"name\" field in the DAT file\'s header.",
+		100, "# ", "#    "))
+	mainConfig.set('System Header Sizes (Advanced)', '###')
 	mainConfig["System Header Sizes (Advanced)"]["Nintendo - Nintendo Entertainment System (Parent-Clone)"] = "16"
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
@@ -484,9 +502,9 @@ def createDeviceProfile():
 	deviceConfig["Special Categories"] = {}
 
 	print("\n"+limitedString("(3/5) Please type the names of any Special Folders or Regions you would like to skip in copying. Use \"|\" as a divider.",
-		80, "- ", "  "))
+		80, "", "  "))
 	print("\n"+limitedString("For example, to skip all roms that are either Japan or Compilation, type the following: Japan|Compilation",
-		80, "- ", "  "))
+		80, "  ", "  "))
 	print("According to your settings.ini file, possible Special Folders and Regions are:")
 	specialFolders = [folder for folder in mainConfig["Special Folders"]]
 	regions = [region for region in mainConfig["Regions"]]
@@ -498,9 +516,9 @@ def createDeviceProfile():
 
 	print("\n(4/5) Please type the names of any Primary Regions.")
 	print(limitedString("These folders will not be created in romset organization; instead, their contents are added to the root folder of the current system. Use \"|\" as a divider.",
-		80, "- ", "  "))
+		80, "  ", "  "))
 	print(limitedString("For example, if you wanted all USA and Europe roms in the root folder instead of [USA] and [Europe] subfolders, you would type the following: USA|Europe",
-		80, "- ", "  "))
+		80, "  ", "  "))
 	print("According to your settings.ini file, possible Regions are:")
 	print(", ".join(["\""+entry+"\"" for entry in regions]))
 	currInput = input().strip()
@@ -508,11 +526,11 @@ def createDeviceProfile():
 	deviceConfig["Special Categories"]["Primary Regions"] = "|".join(currInputParsed)
 
 	print("\n"+limitedString("(5/5) When exporting, you have the option to copy contents that exist in this device's rom folder, but not in the main rom folder, into a \"Copied From Device\" folder. This is useful for keeping your devices in parity with each other.",
-		80, "- ", "  "))
+		80, "", "  "))
 	print(limitedString("Please type the exact names of any folders in your device's rom folder that you do not want to copy to this folder. These folders will be skipped; this is useful if you keep roms and non-rom PC games in the same folder. Use \"|\" as a divider.",
-		80, "- ", "  "))
+		80, "  ", "  "))
 	print(limitedString("For example, if you wanted to ignore anything in the \"Steam\" folder, you would type the following: Steam",
-		80, "- ", "  "))
+		80, "  ", "  "))
 	print("Common recommended subfolders are Steam, Windows, and PC Games")
 	currInput = input().strip()
 	currInputParsed = [val.strip() for val in barSplit(currInput)]
