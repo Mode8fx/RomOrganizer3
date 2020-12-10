@@ -19,7 +19,8 @@ import binascii
 """
 TODO:
 
-- Add Redump compatibility
+- Optimize export process using gameNameToCRC and crcToGameName
+- Test export process
 - Wrap into an executable
 """
 
@@ -148,16 +149,12 @@ def updateAndAuditVerifiedRomsets():
 					foundMatch = renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameNames)
 			xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
 			xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
-			copies = getCopies(currSystemFolder)
-			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName, copies)
+			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName)
 			numNoCRC = len(romsWithoutCRCMatch)
 			if numNoCRC > 0:
 				print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
 				print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
 					80, "", ""))
-			numCopies = len(copies)
-			if numCopies > 0:
-				print("\nWarning: This romset contains "+str(numCopies)+pluralize(" file", numCopies)+pluralize("", numCopies, " that is a possible copy of another file.", " that are possible copies of other files."))
 
 	inputHidden("\nDone. Press Enter to continue.")
 
@@ -235,14 +232,6 @@ def renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameN
 	if not foundMatch:
 		romsWithoutCRCMatch.append(file)
 
-def getCopies(currSystemFolder):
-	copies = []
-	for root, dirs, files in walk(currSystemFolder):
-		for file in files:
-			if " (copy) (" in file or " (no match)" in file:
-				copies.append(path.join(root, file))
-	return copies
-
 def renameGame(filePath, newName, fileExt):
 	if zipfile.is_zipfile(filePath):
 		renameArchiveAndContent(filePath, newName)
@@ -250,7 +239,7 @@ def renameGame(filePath, newName, fileExt):
 		rename(filePath, path.join(path.dirname(filePath), newName+fileExt))
 		print("Renamed "+path.splitext(path.basename(filePath))[0]+" to "+newName)
 
-def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName, copies):
+def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName):
 	xmlRomsInSet.sort()
 	xmlRomsNotInSet.sort()
 	romsWithoutCRCMatch.sort()
@@ -258,7 +247,6 @@ def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, cur
 	numOverlap = len(xmlRomsInSet)
 	numNotInSet = len(xmlRomsNotInSet)
 	numNoCRC = len(romsWithoutCRCMatch)
-	numCopies = len(copies)
 	auditLogFile = open(path.join(logFolder, "Audit ("+currSystemName+") ["+str(numOverlap)+" out of "+str(numOverlap+numNotInSet)+"].txt"), "w", encoding="utf-8", errors="replace")
 	auditLogFile.writelines("=== "+currSystemName+" ===\n")
 	auditLogFile.writelines("=== This romset contains "+str(numOverlap)+" of "+str(numOverlap+numNotInSet)+" known ROMs ===\n\n")
@@ -273,10 +261,6 @@ def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, cur
 	if numNoCRC > 0:
 		auditLogFile.writelines("\n=== This romset contains "+str(numNoCRC)+pluralize(" file", numNoCRC)+" with no known database match ===\n\n")
 		for rom in romsWithoutCRCMatch:
-			auditLogFile.writelines(rom+"\n")
-	if numCopies > 0:
-		auditLogFile.writelines("\n=== This romset contains "+str(numCopies)+pluralize(" file", numCopies)+" that are possible duplicates ===\n\n")
-		for rom in copies:
 			auditLogFile.writelines(rom+"\n")
 	auditLogFile.close()
 
