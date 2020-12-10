@@ -2,6 +2,7 @@ import sys
 import os
 from os import path, mkdir, listdir, rmdir
 from getpass import getpass as inputHidden
+import math
 
 ##############
 # USER INPUT #
@@ -232,16 +233,16 @@ def verifySeed(seed, maxValueArray, base=10):
 		The number in the given base.
 """
 def dec_to_base(num,base):  #Maximum base - 36
-    base_num = ""
-    while num>0:
-        dig = int(num%base)
-        if dig<10:
-            base_num += str(dig)
-        else:
-            base_num += chr(ord('A')+dig-10)  #Using uppercase letters
-        num //= base
-    base_num = base_num[::-1]  #To reverse the string
-    return base_num
+	base_num = ""
+	while num>0:
+		dig = int(num%base)
+		if dig<10:
+			base_num += str(dig)
+		else:
+			base_num += chr(ord('A')+dig-10)  #Using uppercase letters
+		num //= base
+	base_num = base_num[::-1]  #To reverse the string
+	return base_num
 
 ########################
 # FILE/PATH MANAGEMENT #
@@ -430,14 +431,14 @@ def getFileExt(folder, fileName):
 		The number of bytes taken up by the directory.
 """
 def getDirSize(startPath = '.'):
-    totalSize = 0
-    for dirpath, dirnames, filenames in os.walk(startPath):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            # skip if it is symbolic link
-            if not os.path.islink(fp):
-                totalSize += os.path.getsize(fp)
-    return totalSize
+	totalSize = 0
+	for dirpath, dirnames, filenames in os.walk(startPath):
+		for f in filenames:
+			fp = os.path.join(dirpath, f)
+			# skip if it is symbolic link
+			if not os.path.islink(fp):
+				totalSize += os.path.getsize(fp)
+	return totalSize
 
 ####################
 # ARRAY MANAGEMENT #
@@ -513,14 +514,14 @@ def mergeNestedArray(arr, finalArr=[]):
 		How many instances of this element there are in the array.
 """
 def most_frequent(arr): 
-    counter = 0
-    elem = arr[0]
-    for i in arr:
-        curr_frequency = arr.count(i)
-        if (curr_frequency > counter):
-            counter = curr_frequency
-            elem = i
-    return elem, counter
+	counter = 0
+	elem = arr[0]
+	for i in arr:
+		curr_frequency = arr.count(i)
+		if (curr_frequency > counter):
+			counter = curr_frequency
+			elem = i
+	return elem, counter
 
 """
 	Returns whether or not arr1 is an ordered subset of arr2.
@@ -700,6 +701,54 @@ def limitedString(string, lineLength=80, firstLineIndent="", lineIndent="  "):
 			isStartOfLine = True
 	totalString += currString
 	return totalString
+
+"""
+	Returns a string indicating the input number of bytes in its most significant form, rounding up to the indicated number of decimal places.
+	For example, if numBytes is at least 1 MB but less than 1 GB, it will be displayed in MB.
+
+	Parameters
+	----------
+	numBytes : int
+		The number of bytes.
+	decimalPlaces : int
+		The number of decimal places to round to.
+
+	Retruns
+	-------
+	str
+		The number of the most significant data size, along with the data size itself.
+
+	Examples
+	--------
+	Input 1
+		5000000, 3
+	Output 1
+		4.769 MB
+	Input 2
+		2048, 1
+	Output 2
+		2 KB
+	Input 3
+		2049, 1
+	Output 3
+		2.1 KB
+"""
+def simplifyNumBytes(numBytes, decimalPlaces=2):
+	numBytes = float(numBytes)
+	byteTypeArray = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+	temp = (10.0**decimalPlaces)
+	for byteType in byteTypeArray:
+		if numBytes < 1024:
+			num = math.ceil(numBytes * temp) / temp
+			if num == int(num):
+				num = int(num)
+			return str(num)+" "+byteType
+		numBytes /= 1024.0
+	numBytes *= 1024
+	num = math.ceil(numBytes * temp) / temp
+	if num == int(num):
+		num = int(num)
+	return str(num)+" YB"
 
 """
 SOURCES
