@@ -605,7 +605,7 @@ def mainExport():
 	initScreen()
 	for sc in systemChoices:
 		systemName = currProfileMainDirs[sc-1]
-		print("\n====================\n\n"+systemName+"\n")
+		print("\n====================\n\n"+systemName)
 		romsetCategory = deviceConfig["Main Romsets"][systemName]
 		isRedump = False
 		currSystemDAT = path.join(noIntroDir, systemName+".dat")
@@ -627,14 +627,16 @@ def mainExport():
 		copyMainRomset(romsetCategory, isRedump)
 	if path.isdir(secondaryRomFolder):
 		for sc in secondaryChoices:
-			secondaryChoice = currProfileSecondaryDirs[sc-1]
-			systemName = secondaryChoice
+			systemName = currProfileSecondaryDirs[sc-1]
+			print("\n====================\n\n"+systemName)
 			secondaryCategory = deviceConfig["Secondary Romsets"][systemName]
 			if secondaryCategory == "Yes":
 				copySecondaryRomset()
 	if updateFromDeviceFolder != "":
 		if updateSecondaryChoice == 1:
+			print("\n====================")
 			updateSecondary()
+	print("\n====================")
 	print("\nReview the log files for more information on what files were exchanged between the main drive and "+deviceName+".")
 	inputHidden("Press Enter to return to the main menu.")
 
@@ -704,7 +706,7 @@ def getBestGameName(roms):
 		keepAtt = keepAttribute(att)
 		if keepAtt:
 			bestGameName += " ("+att+")"
-	return bestGameName
+	return bestGameName.rstrip(".")
 
 def keepAttribute(att):
 	for keyword in hiddenKeywords:
@@ -832,7 +834,7 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 
 def copyMainRomset(romsetCategory, isRedump):
 	global gameRomDict, progressBar
-	print("\nCopying main romset for "+systemName+".")
+	print("Main Romset\n")
 	currSystemSourceFolder = path.join(mainRomFolder, systemName)
 	currSystemTargetFolder = path.join(outputFolder, systemName)
 	numGames = len(gameRomDict.keys())
@@ -930,7 +932,7 @@ def createMainCopiedLog(romsCopied, romsFailed):
 		romsetLogFile.close()
 
 def copySecondaryRomset():
-	print("\nCopying secondary romset for "+systemName+".")
+	print("Secondary Romset\n")
 	currSystemSourceFolder = path.join(secondaryRomFolder, systemName)
 	currSystemTargetFolder = path.join(outputFolder, systemName)
 	numFiles = 0
@@ -985,7 +987,7 @@ def createSecondaryCopiedLog(filesCopied, filesFailed):
 
 def updateSecondary():
 	updateFolderName = path.basename(updateFromDeviceFolder)
-	print("\nUpdating "+updateFolderName+" folder from "+deviceName+".")
+	print("\nUpdating "+updateFolderName+" folder from "+deviceName+".\n")
 	createDir(updateFromDeviceFolder)
 	filesCopied = []
 	numFilesSkipped = 0
