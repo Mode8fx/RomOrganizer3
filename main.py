@@ -869,9 +869,9 @@ def copyMainRomset(romsetCategory, isRedump):
 	currNumCopiedBytes = 0
 	progressBar = tqdm(total=numGames, ncols=80)
 	for game in gameRomDict.keys():
+		progressBar.update(1)
 		currSpecialFolders = getSpecialFoldersForGame(game)
 		if arrayOverlap(currSpecialFolders, ignoredFolders):
-			progressBar.update(1)
 			continue
 		currGameFolder = currSystemTargetFolder
 		bestRom, bestRegion = getBestRom(gameRomDict[game])
@@ -931,7 +931,6 @@ def copyMainRomset(romsetCategory, isRedump):
 					romsFailed.append(bestRom)
 			else:
 				numRomsSkipped += 1
-		progressBar.update(1)
 	progressBar.close()
 	if isExport:
 		createMainCopiedLog(romsCopied, romsFailed)
@@ -982,6 +981,7 @@ def copySecondaryRomset():
 	progressBar = tqdm(total=numFiles, ncols=80)
 	for root, dirs, files in walk(currSystemSourceFolder):
 		for fileName in files:
+			progressBar.update(1)
 			currRoot = root.split(currSystemSourceFolder)[1][1:]
 			oldFileDirPathArray = getPathArray(root)
 			if arrayOverlap(ignoredFolders, oldFileDirPathArray):
@@ -1003,7 +1003,6 @@ def copySecondaryRomset():
 					filesFailed.append(sourceRomPath)
 			else:
 				numFilesSkipped += 1
-			progressBar.update(1)
 	progressBar.close()
 	if isExport:
 		createSecondaryCopiedLog(filesCopied, filesFailed)
