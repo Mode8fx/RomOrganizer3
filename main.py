@@ -14,6 +14,7 @@ from filehash import FileHash
 import configparser
 from dateutil.parser import parse as dateParse
 from tqdm import tqdm #, trange
+import binascii
 
 """
 TODO:
@@ -110,12 +111,17 @@ def updateAndAuditVerifiedRomsets():
 					print("Database file not found for "+currSystemName+".")
 					continue
 		tree = ET.parse(currSystemDAT)
-		root = tree.getroot()
-		allGameFields = root[1:]
+		treeRoot = tree.getroot()
+		allGameFields = treeRoot[1:]
+		try:
+			datFileSystemName = treeRoot[0].find("name").text
+			headerLength = int(mainConfig["System Header Sizes (Advanced)"][datFileSystemName])
+		except:
+			headerLength = 0
 		allGameNamesInDAT = {}
 		for game in allGameFields:
 			allGameNamesInDAT[game.get("name")] = False
-		romsWithoutCRC = []
+		romsWithoutCRCMatch = []
 		numFiles = 0
 		for root, dirs, files in walk(currSystemFolder):
 			for file in files:
@@ -130,7 +136,7 @@ def updateAndAuditVerifiedRomsets():
 						continue
 					foundMatch = False
 					if isNoIntro:
-						currFileCRC = getCRC(currFilePath)
+						currFileCRC = getCRC(currFilePath, headerLength)
 						if not currFileCRC:
 							print(file+" archive contains more than one file. Skipping.")
 							continue
@@ -142,24 +148,7 @@ def updateAndAuditVerifiedRomsets():
 							if currDBGameCRC == currFileCRC:
 								currDBGameName = game.get("name")
 								allGameNamesInDAT[currDBGameName] = True
-								if currFileName != currDBGameName:
-									i = 0
-									if path.exists(path.join(root, currDBGameName+currFileExt)): # two of the same file (with different names) exist
-										originalDBGameName = currDBGameName
-										while True:
-											i += 1
-											incrementedGameName = currDBGameName+" (copy) ("+str(i)+")"
-											if not path.exists(path.join(root, incrementedGameName+currFileExt)):
-												break
-										print("\nWarning: Multiple copies of the same rom may exist ("+currDBGameName+").")
-										currDBGameName = incrementedGameName
-									renameGame(currFilePath, currDBGameName, currFileExt)
-									if i > 0:
-										file1 = path.join(root, originalDBGameName+currFileExt)
-										if getCRC(file1) != currDBGameCRC: # If the romset started with a rom that has a name in the database, but with the wrong hash (e.g. it's called "Doom 64 (USA)", but it's actually something else)
-											file2 = path.join(root, currDBGameName+currFileExt)
-											renameGame(file1, originalDBGameName+" (no match)", currFileExt)
-											renameGame(file2, originalDBGameName, currFileExt)
+								renamingProcess(currFileName, currDBGameName, root, currFileExt, currFilePath, headerLength, currDBGameCRC)
 								foundMatch = True
 								break
 					else:
@@ -170,29 +159,88 @@ def updateAndAuditVerifiedRomsets():
 								foundMatch = True
 								break
 					if not foundMatch:
-						romsWithoutCRC.append(currFileName+" ("+file+")")
+						romsWithoutCRCMatch.append(file)
+			# Fix files renamed to (copy)
+			if isNoIntro:
+				copies = getCopies(currSystemFolder)
+				for currFilePath in copies:
+					root, file = path.split(currFilePath)
+					currFileName, currFileExt = path.splitext(file)
+					currFileCRC = getCRC(currFilePath, headerLength)
+					for game in allGameFields:
+						try:
+							currDBGameCRC = game.find("rom").get("crc").upper()
+						except:
+							currDBGameCRC = None
+						currDBGameName = game.get("name")
+						if currDBGameCRC == currFileCRC and not path.exists(root, currDBGameName+currFileExt):
+							allGameNamesInDAT[currDBGameName] = True
+							renamingProcess(currFileName, currDBGameName, root, currFileExt, currFilePath, headerLength, currDBGameCRC)
+
 			xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
 			xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
-			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName)
-			numNoCRC = len(romsWithoutCRC)
+			copies = getCopies(currSystemFolder)
+			createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName, copies)
+			numNoCRC = len(romsWithoutCRCMatch)
 			if numNoCRC > 0:
 				print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
 				print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
 					80, "", ""))
+			numCopies = len(copies)
+			if numCopies > 0:
+				print("\nWarning: This romset contains "+str(numCopies)+pluralize(" file", numCopies)+pluralize("", numCopies, " that is a possible copy of another file.", " that are possible copies of other files."))
 
 	inputHidden("\nDone. Press Enter to continue.")
 
-def getCRC(filePath):
+def getCRC(filePath, headerLength=0):
 	if zipfile.is_zipfile(filePath):
 		with zipfile.ZipFile(filePath, 'r', zipfile.ZIP_DEFLATED) as zippedFile:
 			if len(zippedFile.namelist()) > 1:
 				return False
-			fileInfo = zippedFile.infolist()[0]
-			# currZippedFile = fileInfo.filename
-			return format(fileInfo.CRC & 0xFFFFFFFF, '08x').upper() # crc32
+			if headerLength == 0:
+				fileInfo = zippedFile.infolist()[0]
+				fileCRC = format(fileInfo.CRC & 0xFFFFFFFF, '08x')
+				return fileCRC.zfill(8).upper()
+			else:
+				fileBytes = zippedFile.read(zippedFile.namelist()[0])
+				headerlessCRC = str(hex(binascii.crc32(fileBytes[headerLength:])))[2:]
+				return headerlessCRC.zfill(8).upper()
 	else:
-		# currZippedFile = None
-		return crcHasher.hash_file(filePath).upper()
+		if headerLength == 0:
+			fileCRC = crcHasher.hash_file(filePath)
+			return fileCRC.zfill(8).upper()
+		with open(filePath, "rb") as unheaderedFile:
+			fileBytes = unheaderedFile.read()
+			headerlessCRC = str(hex(binascii.crc32(fileBytes[headerLength:])))[2:]
+			return headerlessCRC.zfill(8).upper()
+
+def renamingProcess(currFileName, currDBGameName, root, currFileExt, currFilePath, headerLength, currDBGameCRC):
+	if currFileName != currDBGameName:
+		i = 0
+		if path.exists(path.join(root, currDBGameName+currFileExt)): # two of the same file (with different names) exist
+			originalDBGameName = currDBGameName
+			while True:
+				i += 1
+				incrementedGameName = currDBGameName+" (copy) ("+str(i)+")"
+				if not path.exists(path.join(root, incrementedGameName+currFileExt)):
+					break
+			# print("\nWarning: Multiple copies of the same rom may exist ("+currDBGameName+").")
+			currDBGameName = incrementedGameName
+		renameGame(currFilePath, currDBGameName, currFileExt)
+		if i > 0:
+			file1 = path.join(root, originalDBGameName+currFileExt)
+			if getCRC(file1, headerLength) != currDBGameCRC: # If the romset started with a rom that has a name in the database, but with the wrong hash (e.g. it's called "Doom 64 (USA)", but it's actually something else)
+				file2 = path.join(root, currDBGameName+currFileExt)
+				renameGame(file1, originalDBGameName+" (no match)", currFileExt)
+				renameGame(file2, originalDBGameName, currFileExt)
+
+def getCopies(currSystemFolder):
+	copies = []
+	for root, dirs, files in walk(currSystemFolder):
+		for file in files:
+			if " (copy) (" in file:
+				copies.append(path.join(root, file))
+	return copies
 
 def renameGame(filePath, newName, fileExt):
 	if zipfile.is_zipfile(filePath):
@@ -201,14 +249,15 @@ def renameGame(filePath, newName, fileExt):
 		rename(filePath, path.join(path.dirname(filePath), newName+fileExt))
 		print("Renamed "+path.splitext(path.basename(filePath))[0]+" to "+newName)
 
-def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSystemName):
+def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, currSystemName, copies):
 	xmlRomsInSet.sort()
 	xmlRomsNotInSet.sort()
-	romsWithoutCRC.sort()
+	romsWithoutCRCMatch.sort()
 
 	numOverlap = len(xmlRomsInSet)
 	numNotInSet = len(xmlRomsNotInSet)
-	numNoCRC = len(romsWithoutCRC)
+	numNoCRC = len(romsWithoutCRCMatch)
+	numCopies = len(copies)
 	auditLogFile = open(path.join(logFolder, "Audit ("+currSystemName+") ["+str(numOverlap)+" out of "+str(numOverlap+numNotInSet)+"].txt"), "w", encoding="utf-8", errors="replace")
 	auditLogFile.writelines("=== "+currSystemName+" ===\n")
 	auditLogFile.writelines("=== This romset contains "+str(numOverlap)+" of "+str(numOverlap+numNotInSet)+" known ROMs ===\n\n")
@@ -222,7 +271,11 @@ def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRC, currSyst
 			auditLogFile.writelines(rom+"\n")
 	if numNoCRC > 0:
 		auditLogFile.writelines("\n=== This romset contains "+str(numNoCRC)+pluralize(" file", numNoCRC)+" with no known database match ===\n\n")
-		for rom in romsWithoutCRC:
+		for rom in romsWithoutCRCMatch:
+			auditLogFile.writelines(rom+"\n")
+	if numCopies > 0:
+		auditLogFile.writelines("\n=== This romset contains "+str(numCopies)+pluralize(" file", numCopies)+" that are possible duplicates ===\n\n")
+		for rom in copies:
 			auditLogFile.writelines(rom+"\n")
 	auditLogFile.close()
 
@@ -351,6 +404,11 @@ def createMainConfig():
 		"Undumped Japanese Download Station", "WiiWare Broadcast",
 		"Disk Writer", "Collection of Mana"
 		])
+	# System Header Sizes
+	mainConfig["System Header Sizes (Advanced)"] = {}
+	mainConfig.set('System Header Sizes (Advanced)', '# The size (in bytes) of each system\'s header (0 by default). This is used when comparing a game\'s CRC hash to its system database.')
+	mainConfig.set('System Header Sizes (Advanced)', '# Each system name should match the "name" field in the DAT file\'s header.')
+	mainConfig["System Header Sizes (Advanced)"]["Nintendo - Nintendo Entertainment System (Parent-Clone)"] = "16"
 	with open(mainConfigFile, 'w') as mcf:
 		mainConfig.write(mcf)
 	print("Created new settings.ini")
