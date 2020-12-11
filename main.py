@@ -365,24 +365,25 @@ def createMainConfig():
 	])
 	# Special Folders
 	mainConfig["Special Folders"] = {}
-	mainConfig.set('Special Folders', limitedString("Special Folders are folders that are created on your device upon export for verified ROMs with filesnames that start with certain strings.",
+	mainConfig.set('Special Folders', limitedString("Special Folders are folders that are created on your device upon export for verified games with names that contain certain strings.",
 		100, "# ", "#    "))
-	mainConfig.set('Special Folders', limitedString("For example, any ROM whose name starts with \"2 Games in 1 - \" will be exported to a subfolder called \"Compilation\".",
+	mainConfig.set('Special Folders', limitedString("For example, any game whose name contains \"2 Games in 1 - \" will be exported to a subfolder called \"Compilation\".",
 		100, "# ", "#    "))
-	mainConfig.set('Special Folders', limitedString("You could then choose to ignore any ROMs marked as \"Compilation\" when exporting to a specific device (see device profiles).",
+	mainConfig.set('Special Folders', limitedString("You could then choose to ignore any games marked as \"Compilation\" when exporting to a specific device (see device profiles).",
 		100, "# ", "#    "))
 	mainConfig.set('Special Folders', limitedString("Feel free to add additional Special Folders (or add to existing folders) using the format below (with \"|\" as a delimiter).",
 		100, "# ", "#    "))
-	mainConfig.set('Special Folders', limitedString("Special Folders are created in order of descending priority, so (to use the default example) if a ROM is in both \"Compilation\" and \"GBA Video\", it will be added to the folder \"SYSTEM/REGION/Compilation/GBA Video/GAME\".",
+	mainConfig.set('Special Folders', limitedString("Special Folders are created in order of descending priority, so (to use the default example) if a game is in both \"Compilation\" and \"GBA Video\", it will be added to the folder \"SYSTEM/REGION/Compilation/GBA Video/GAME\".",
+		100, "# ", "#    "))
+	mainConfig.set('Special Folders', limitedString("Note that special folders are created according to the name of a *game*, not the filenames of each rom within the game.",
 		100, "# ", "#    "))
 	mainConfig.set('Special Folders', '###')
 	mainConfig["Special Folders"]["Compilation"] = "|".join([
 		"2 Games in 1 -", "2 Games in 1! -", "2 Disney Games -", "2-in-1 Fun Pack -",
-		"2 Great Games! -", "2 in 1 -", "2 in 1 Game Pack -", "2 Jeux en 1",
-		"3 Games in 1 -", "4 Games on One Game Pak", "Double Game!",
-		"Castlevania Double Pack", "Combo Pack - ", "Crash Superpack",
-		"Spyro Superpack", "Crash & Spyro Superpack", "Crash & Spyro Super Pack",
-		"Double Pack"
+		"2 Great Games! -", "2 in 1 -", "2 in 1 Game Pack -", "2 Jeux en 1 -",
+		"3 Games in 1 -", "4 Games on One Game Pak", "Castlevania Double Pack",
+		"Combo Pack - ", "Crash Superpack -", "Crash & Spyro Superpack",
+		"Crash & Spyro Super Pack", "Double Game! -", "Double Pack -", "Spyro Superpack -"
 		])
 	mainConfig["Special Folders"]["GBA Video"] = "Game Boy Advance Video"
 	mainConfig["Special Folders"]["NES & Famicom"] = "|".join([
@@ -1013,7 +1014,7 @@ def getSpecialFoldersForGame(game):
 	currSpecialFolders = []
 	for folder in mainConfig["Special Folders"]:
 		for keyword in barSplit(mainConfig["Special Folders"][folder]):
-			if game.startswith(keyword):
+			if keyword in game:
 				currSpecialFolders.append(folder)
 				break
 	return currSpecialFolders
