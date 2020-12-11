@@ -13,17 +13,8 @@ from gatelib import *
 from filehash import FileHash
 import configparser
 from dateutil.parser import parse as dateParse
-from tqdm import tqdm #, trange
+from tqdm import tqdm
 import binascii
-
-"""
-TODO:
-
-- Finish testing export process
-- Add export audit
-- Finalize readme (point out all the features!)
-- Wrap into an executable
-"""
 
 progFolder = getCurrFolder()
 sys.path.append(progFolder)
@@ -36,8 +27,6 @@ noIntroDir = path.join(progFolder, "No-Intro Database")
 redumpDir = path.join(progFolder, "Redump Database")
 profilesFolder = path.join(progFolder, "Device Profiles")
 logFolder = path.join(progFolder, "Logs")
-
-hiddenKeywords = ["Rev", "Disc", "Beta", "Demo", "Sample", "Proto", "Alt", "Earlier", "Download Station"]
 
 ########
 # MAIN #
@@ -57,6 +46,7 @@ def main():
 			"Set secondary ROM folder (currently "+(secondaryRomFolder if secondaryRomFolder != "" else "not set")+")",
 			"Update/audit verified romsets",
 			"Create new device profile",
+			"Update device profile",
 			"Export romset",
 			"Test export of romset",
 			"Help",
@@ -71,11 +61,14 @@ def main():
 			createDeviceProfile()
 		elif choice == 5:
 			isExport = True
-			mainExport()
+			updateDeviceProfile()
 		elif choice == 6:
-			isExport = False
+			isExport = True
 			mainExport()
 		elif choice == 7:
+			isExport = False
+			mainExport()
+		elif choice == 8:
 			printHelp()
 		else:
 			clearScreen()
@@ -88,11 +81,12 @@ def main():
 def updateAndAuditVerifiedRomsets():
 	global allGameNamesInDAT, romsWithoutCRCMatch, progressBar
 	initScreen()
-	currRomsetFolder = askForDirectory("Select the ROM directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
+	currRomsetFolder = askForDirectory("Select the rom directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
 	if currRomsetFolder == "":
 		print("Action cancelled.")
 		sleep(1)
 		return
+	moveUnverified = makeChoice("In the event that unverified roms (roms without a matching database CRC) are\nfound, would you like to automatically move these to an \"[Unverified]\"\nsubfolder within the system folder?", ["Yes", "No"])
 	for currSystemName in listdir(currRomsetFolder):
 		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
@@ -140,12 +134,14 @@ def updateAndAuditVerifiedRomsets():
 		numFiles = 0
 		for root, dirs, files in walk(currSystemFolder):
 			for file in files:
-				numFiles += 1
+				if path.basename(root) != "[Unverified]":
+					numFiles += 1
 		progressBar = tqdm(total=numFiles, ncols=80)
 		for root, dirs, files in walk(currSystemFolder):
 			for file in files:
-				progressBar.update(1)
-				foundMatch = renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameNames)
+				if path.basename(root) != "[Unverified]":
+					progressBar.update(1)
+					foundMatch = renamingProcess(root, file, isNoIntro, headerLength, crcToGameName, allGameNames)
 		progressBar.close()
 		xmlRomsInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == True]
 		xmlRomsNotInSet = [key for key in allGameNamesInDAT.keys() if allGameNamesInDAT[key] == False]
@@ -154,7 +150,18 @@ def updateAndAuditVerifiedRomsets():
 		if numNoCRC > 0:
 			print("\nWarning: "+str(numNoCRC)+pluralize(" file", numNoCRC)+" in this system folder "+pluralize("do", numNoCRC, "es", "")+" not have a matching database entry.")
 			print(limitedString("If this system folder is in your main verified rom directory, you should move "+pluralize("", numNoCRC, "this file", "these files")+" to your secondary folder; otherwise, "+pluralize("", numNoCRC, "it", "they")+" may be ignored when exporting this system's romset to another device.",
-				80, "", ""))
+				80, "", "  "))
+			if moveUnverified == 1:
+				numMoved = 0
+				unverifiedFolder = path.join(currSystemFolder, "[Unverified]")
+				createDir(unverifiedFolder)
+				for fileName in romsWithoutCRCMatch:
+					try:
+						rename(path.join(currSystemFolder, fileName), path.join(unverifiedFolder, fileName))
+						numMoved += 1
+					except:
+						pass
+				print("Moved "+str(numMoved)+" of these file(s) to \"[Unverified]\" subfolder in system directory.")
 
 	inputHidden("\nDone. Press Enter to continue.")
 
@@ -247,7 +254,7 @@ def createSystemAuditLog(xmlRomsInSet, xmlRomsNotInSet, romsWithoutCRCMatch, cur
 	numOverlap = len(xmlRomsInSet)
 	numNotInSet = len(xmlRomsNotInSet)
 	numNoCRC = len(romsWithoutCRCMatch)
-	auditLogFile = open(path.join(logFolder, "Audit ("+currSystemName+") ["+str(numOverlap)+" out of "+str(numOverlap+numNotInSet)+"].txt"), "w", encoding="utf-8", errors="replace")
+	auditLogFile = open(path.join(logFolder, "Audit ("+currSystemName+") ["+str(numOverlap)+" out of "+str(numOverlap+numNotInSet)+"] ["+str(numNoCRC)+"].txt"), "w", encoding="utf-8", errors="replace")
 	auditLogFile.writelines("=== "+currSystemName+" ===\n")
 	auditLogFile.writelines("=== This romset contains "+str(numOverlap)+" of "+str(numOverlap+numNotInSet)+" known ROMs ===\n\n")
 	if numOverlap > 0:
@@ -298,7 +305,7 @@ def prepareMainConfig():
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
 	# regions = [key for key in mainConfig["Regions"]]
 	# specialFolders = barSplit(mainConfig["Special Folders"])
-	# specialAttributes = hiddenKeywords + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
+	# specialAttributes = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	try:
 		mainSystemDirs = [d for d in listdir(mainRomFolder) if path.isdir(path.join(mainRomFolder, d))]
 	except:
@@ -342,7 +349,7 @@ def createMainConfig():
 		"World", "U", "USA"
 		])
 	mainConfig["Regions"]["Europe"] = "|".join([
-		"E", "Europe"
+		"E", "Europe", "United Kingdom"
 		])
 	mainConfig["Regions"]["Other (English)"] = "|".join([
 		"En", "A", "Australia", "Ca", "Canada"
@@ -391,11 +398,14 @@ def createMainConfig():
 		100, "# ", "#    "))
 	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("\"Sources\" are also used in determining the best ROM for 1G1R sets (they are given lower priority).",
 		100, "# ", "#    "))
+	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("Parentheses field are also ignored if they start with a \"Starter\". For example, \"Rev\" includes (Rev 1), (Rev 2), (Rev A), ...",
+		100, "# ", "#    "))
 	mainConfig.set('Special ROM Attributes (Advanced)', '###')
 	mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
 		"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
 		"Club Nintendo", "Aftermarket", "Test Program", "Competition Cart",
-		"NES Test", "Promotion Card", "Program", "Manual"
+		"NES Test", "Promotion Card", "Program", "Manual", "NDSi Enhanced",
+		"Wi-Fi Kiosk"
 		])
 	mainConfig["Special ROM Attributes (Advanced)"]["Sources"] = "|".join([
 		"Virtual Console", "Switch Online", "GameCube", "Namcot Collection",
@@ -403,7 +413,13 @@ def createMainConfig():
 		"DLC", "Minis", "Promo", "Nintendo Channel", "Nintendo Channel, Alt",
 		"DS Broadcast", "Wii Broadcast", "DS Download Station", "Dwnld Sttn",
 		"Undumped Japanese Download Station", "WiiWare Broadcast",
-		"Disk Writer", "Collection of Mana"
+		"Disk Writer", "Collection of Mana", "Namco Museum Archives Vol 1",
+		"Namco Museum Archives Vol 2", "Castlevania Anniversary Collection",
+		"Nintendo Switch", "NP"
+		])
+	mainConfig["Special ROM Attributes (Advanced)"]["Starters"] = "|".join([
+		"Rev", "Disc", "Beta", "Demo", "Sample", "Proto", "Alt", "Earlier",
+		"Download Station", "FW", "Reprint"
 		])
 	# System Header Sizes
 	mainConfig["System Header Sizes (Advanced)"] = {}
@@ -419,7 +435,7 @@ def createMainConfig():
 	inputHidden("Press Enter to continue.")
 
 def selectDeviceProfile():
-	global deviceName, deviceConfig
+	global deviceName, deviceConfig, deviceConfigFile
 	global ignoredFolders, primaryRegions
 	initScreen()
 	deviceProfiles = [prof for prof in listdir(profilesFolder) if path.splitext(prof)[1] == ".ini"]
@@ -454,7 +470,7 @@ def createDeviceProfile():
 	print("\nFollow these steps to create a new device profile.")
 	skipSecondary = False
 	if secondaryRomFolder == "":
-		choice = makeChoice("Are you using a secondary rom folder containing unverified roms such as hacks,\nhomebrew, etc.?", ["Yes, I have a secondary folder", "No, verified roms only"])
+		choice = makeChoice("Are you using a secondary rom folder containing unverified files such as hacks,\nhomebrew, etc.?", ["Yes, I have a secondary folder", "No, verified roms only"])
 		if choice == 1:
 			print("Go back to the main menu and select \"Set secondary ROM folder\".")
 			inputHidden("Press Enter to continue.")
@@ -473,31 +489,16 @@ def createDeviceProfile():
 	# Main Romsets
 	deviceConfig["Main Romsets"] = {}
 
-	print("\n(2/5) Please define how each romset should be copied to this device.")
+	print("\n(2/5) Please define how each romset should be exported to this device.")
 	for currSystemName in mainSystemDirs:
-		copyType = makeChoice(currSystemName, ["Full (copy all contents)",
-			"1G1R (copy only the most significant rom for each game)",
-			"1G1R Primary (same as 1G1R, but ignore games that do not have a rom for a primary region",
-			"None (skip this system)"])
-		if copyType == 1:
-			deviceConfig["Main Romsets"][currSystemName] = "Full"
-		elif copyType == 2:
-			deviceConfig["Main Romsets"][currSystemName] = "1G1R"
-		elif copyType == 3:
-			deviceConfig["Main Romsets"][currSystemName] = "1G1R Primary"
-		elif copyType == 4:
-			deviceConfig["Main Romsets"][currSystemName] = "None"
+		addMainSystemToDeviceConfig(currSystemName)
 	# Secondary Romsets
 	deviceConfig["Secondary Romsets"] = {}
 	if not skipSecondary:
 		print("\nPlease define whether or not each folder in the secondary rom folder should be")
-		print("copied to this device.")
+		print("exported to this device.")
 		for currSystemName in secondarySystemDirs:
-			copyType = makeChoice(currSystemName, ["Yes", "No"])
-			if copyType == 1:
-				deviceConfig["Secondary Romsets"][currSystemName] = "Yes"
-			else:
-				deviceConfig["Secondary Romsets"][currSystemName] = "No"
+			addSecondarySystemToDeviceConfig(currSystemName)
 	# Special Categories
 	deviceConfig["Special Categories"] = {}
 
@@ -541,6 +542,73 @@ def createDeviceProfile():
 	print("\nCreated new profile for "+deviceName+".")
 	inputHidden("Press Enter to continue.")
 
+def updateDeviceProfile():
+	global deviceConfig
+	initScreen()
+	if not verifyMainRomFolder():
+		return
+	if not selectDeviceProfile():
+		return
+	skipSecondary = False
+	if secondaryRomFolder == "":
+		choice = makeChoice("Are you using a secondary rom folder containing unverified files such as hacks,\nhomebrew, etc.?", ["Yes, I have a secondary folder", "No, verified roms only"])
+		if choice == 1:
+			print("Go back to the main menu and select \"Set secondary ROM folder\".")
+			inputHidden("Press Enter to continue.")
+			return
+		else:
+			skipSecondary = True
+
+	missingMainSystems = []
+	for currSystemName in mainSystemDirs:
+		if not currSystemName in list(deviceConfig["Main Romsets"].keys()):
+			missingMainSystems.append(currSystemName)
+	if len(missingMainSystems) == 0:
+		print("\nCurrent device profile is not missing any systems from main rom folder.")
+	else:
+		print("\nPlease define how each romset should be exported to this device.")
+		for currSystemName in missingMainSystems:
+			addMainSystemToDeviceConfig(currSystemName)
+	if not skipSecondary:
+		missingSecondarySystems = []
+		for currSystemName in secondarySystemDirs:
+			if not currSystemName in list(deviceConfig["Secondary Romsets"].keys()):
+				missingSecondarySystems.append(currSystemName)
+		if len(missingSecondarySystems) == 0:
+			print("\nCurrent device profile is not missing any systems from secondary rom folder.")
+		else:
+			print("\nPlease define whether or not each folder in the secondary rom folder should be")
+			print("exported to this device.")
+			for currSystemName in missingSecondarySystems:
+				addSecondarySystemToDeviceConfig(currSystemName)
+	with open(deviceConfigFile, 'w') as dcf:
+		deviceConfig.write(dcf)
+	print("\nUpdated profile for "+deviceName+".")
+	inputHidden("Press Enter to continue.")
+
+def addMainSystemToDeviceConfig(currSystemName):
+	global deviceConfig
+	copyType = makeChoice(currSystemName, ["Full (copy all contents)",
+		"1G1R (copy only the most significant rom for each game)",
+		"1G1R Primary (same as 1G1R, but ignore games that do not have a rom for a primary region",
+		"None (skip this system)"])
+	if copyType == 1:
+		deviceConfig["Main Romsets"][currSystemName] = "Full"
+	elif copyType == 2:
+		deviceConfig["Main Romsets"][currSystemName] = "1G1R"
+	elif copyType == 3:
+		deviceConfig["Main Romsets"][currSystemName] = "1G1R Primary"
+	elif copyType == 4:
+		deviceConfig["Main Romsets"][currSystemName] = "None"
+
+def addSecondarySystemToDeviceConfig(currSystemName):
+	global deviceConfig
+	copyType = makeChoice(currSystemName, ["Yes", "No"])
+	if copyType == 1:
+		deviceConfig["Secondary Romsets"][currSystemName] = "Yes"
+	else:
+		deviceConfig["Secondary Romsets"][currSystemName] = "No"
+
 ##########################
 # SET/VERIFY ROM FOLDERS #
 ##########################
@@ -548,7 +616,7 @@ def createDeviceProfile():
 def setMainRomFolder():
 	global mainConfig, mainSystemDirs, mainRomFolder
 	initScreen()
-	newMainRomFolder = askForDirectory("Select a main ROM folder. This directory should contain system folders, which contain No-Intro verified ROMs.")
+	newMainRomFolder = askForDirectory("Select a main rom folder. This directory should contain system folders, which contain No-Intro verified roms.")
 	if newMainRomFolder == "":
 		print("Action cancelled.")
 		sleep(1)
@@ -563,7 +631,7 @@ def setMainRomFolder():
 def setSecondaryRomFolder():
 	global mainConfig, secondarySystemDirs, secondaryRomFolder
 	initScreen()
-	newSecondaryRomFolder = askForDirectory("Select a secondary ROM folder. This directory should contain system folders, which can contain unverified ROMS/other files (rom hacks, homebrew, etc).")
+	newSecondaryRomFolder = askForDirectory("Select a secondary rom folder. This directory should contain system folders, which can contain unverified roms/other files (rom hacks, homebrew, etc).")
 	if newSecondaryRomFolder == "":
 		print("Action cancelled.")
 		sleep(1)
@@ -590,7 +658,7 @@ def verifyMainRomFolder():
 # EXPORT #
 ##########
 
-def mainExport(isExport=False):
+def mainExport():
 	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, deviceName, systemName, outputFolder
 	initScreen()
 	if not verifyMainRomFolder():
@@ -625,7 +693,7 @@ def mainExport(isExport=False):
 	if isExport:
 		updateSecondaryChoice = makeChoice("Update \""+path.basename(updateFromDeviceFolder)+"\" folder by adding any files that are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
 	else:
-		updateSecondaryChoice = 1
+		updateSecondaryChoice = makeChoice("Test update of \""+path.basename(updateFromDeviceFolder)+"\" folder by checking which files are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
 	outputFolder = askForDirectory("\nSelect the ROM directory of your "+deviceName+" (example: F:/Roms).")
 	initScreen()
 	numCopiedBytesMain = 0
@@ -649,8 +717,7 @@ def mainExport(isExport=False):
 					continue
 		generateGameRomDict(currSystemDAT)
 		numCopiedBytesMain += copyMainRomset(romsetCategory, isRedump)
-	if numCopiedBytesMain > 0:
-		print("\n====================\n\nMain Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesMain))
+	print("\n====================\n\nMain Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesMain))
 	if path.isdir(secondaryRomFolder):
 		for sc in secondaryChoices:
 			systemName = currProfileSecondaryDirs[sc-1]
@@ -658,8 +725,7 @@ def mainExport(isExport=False):
 			secondaryCategory = deviceConfig["Secondary Romsets"][systemName]
 			if secondaryCategory == "Yes":
 				numCopiedBytesSecondary += copySecondaryRomset()
-		if numCopiedBytesSecondary > 0:
-			print("\n====================\n\nSecondary Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesSecondary))
+		print("\n====================\n\nSecondary Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesSecondary))
 	if updateFromDeviceFolder != "":
 		if updateSecondaryChoice == 1:
 			print("\n====================")
@@ -739,16 +805,16 @@ def getBestGameName(roms):
 	return bestGameName.rstrip(".")
 
 def keepAttribute(att):
-	for keyword in hiddenKeywords:
+	for keyword in barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"]):
 		if att.startswith(keyword):
 			return False
 	if att.startswith("v") and len(att) > 1 and att[1].isdigit():
 		return False
 	for region in mainConfig["Regions"]:
-		if att in mainConfig["Regions"][region]:
+		if att in barSplit(mainConfig["Regions"][region]):
 			return False
 	for specialCategory in mainConfig["Special ROM Attributes (Advanced)"]:
-		if att in mainConfig["Special ROM Attributes (Advanced)"][specialCategory]:
+		if att in barSplit(mainConfig["Special ROM Attributes (Advanced)"][specialCategory]):
 			return False
 	if "Virtual Console" in att:
 		return False
@@ -797,7 +863,7 @@ def getScore(rom):
 	lastVersion = 0
 	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	for att in attributes:
-		if att.startswith("Rev"):
+		if att.startswith("Rev") or att.startswith("Reprint"):
 			try:
 				score += 15 + (15 * int(att.split()[1]))
 			except:
@@ -878,7 +944,7 @@ def copyMainRomset(romsetCategory, isRedump):
 		bestRegionIsPrimary = bestRegion in primaryRegions
 		if not bestRegionIsPrimary:
 			currGameFolder = path.join(currGameFolder, "["+bestRegion+"]")
-		if "(Unl" in bestRom:
+		if "(Unl" in bestRom or "(Pirate" in bestRom:
 			currGameFolder = path.join(currGameFolder, "[Unlicensed]")
 		if "(Proto" in bestRom:
 			currGameFolder = path.join(currGameFolder, "[Unreleased]")
@@ -934,12 +1000,12 @@ def copyMainRomset(romsetCategory, isRedump):
 	progressBar.close()
 	if isExport:
 		createMainCopiedLog(romsCopied, romsFailed)
-		print("\nCopied "+str(len(romsCopied))+" new roms.")
-		print("Skipped "+str(numRomsSkipped)+" roms that already exist on this device.")
-		print("Failed to copy "+str(len(romsFailed))+" new roms.")
+		print("\nCopied "+str(len(romsCopied))+" new files.")
+		print("Skipped "+str(numRomsSkipped)+" files that already exist on this device.")
+		print("Failed to copy "+str(len(romsFailed))+" new files.")
 	else:
-		print("\n"+str(len(romsCopied))+" new roms would be copied.")
-		print(str(numRomsSkipped)+" old roms would be skipped.")
+		print("\n"+str(len(romsCopied))+" new files would be copied.")
+		print(str(numRomsSkipped)+" old files would be skipped.")
 	print("Export Size: "+simplifyNumBytes(currNumCopiedBytes))
 	return currNumCopiedBytes
 
@@ -1051,9 +1117,10 @@ def updateSecondary():
 			updateFolder = path.join(updateFromDeviceFolder, currRoot)
 			fileInUpdate = path.join(updateFolder, file)
 			if not (path.isfile(fileInRomset) or path.isfile(fileInSecondary) or path.isfile(fileInUpdate)):
-				createDir(updateFolder)
 				try:
-					shutil.copy(fileInOutput, fileInUpdate)
+					if isExport:
+						createDir(updateFolder)
+						shutil.copy(fileInOutput, fileInUpdate)
 					# print("From "+deviceName+" to "+updateFolderName+": "+fileInUpdate)
 					currNumCopiedBytes += path.getsize(sourceRomPath)
 					filesCopied.append(fileInUpdate)
@@ -1122,12 +1189,12 @@ def barSplit(string):
 def printHelp():
 	clearScreen()
 	print("\nSet main ROM folder")
-	print(limitedString("Allows you to set a main rom folder. This is the directory that contains system folders, which contain No-Intro verified ROMs.",
+	print(limitedString("Allows you to set a main rom folder. This is the directory that contains system folders, which contain No-Intro verified roms.",
 		80, "- ", "  "))
 	print(limitedString("Example: MAINFOLDER/Sega Genesis/Sonic the Hedgehog (USA, Europe).zip",
 		80, "- ", "  "))
 	print("\nSet secondary ROM folder")
-	print(limitedString("(Optional) Allows you to set a secondary rom folder. This is a directory that contains system folders, which can contain unverified ROMs/other files (rom hacks, homebrew, etc).",
+	print(limitedString("(Optional) Allows you to set a secondary rom folder. This is a directory that contains system folders, which can contain unverified roms/other files (rom hacks, homebrew, etc).",
 		80, "- ", "  "))
 	print(limitedString("Example: SECONDARYFOLDER/Sega Genesis/[Hacks]/Sonic/Sonic 2 Delta.zip",
 		80, "- ", "  "))
@@ -1149,6 +1216,9 @@ def printHelp():
 		80, "  - ", "    "))
 	print(limitedString("Which folders, if any, exist in your device's rom folder that you do not want to copy back to the main folder.",
 		80, "  - ", "    "))
+	print("\nUpdate device profile")
+	print(limitedString("Update an existing device profile for newly-added folders in your main and secondary rom folders.",
+		80, "- ", "  "))
 	print("\nExport romset")
 	print(limitedString("Exports romset according to current device profile. Either all systems or a subset of systems may be chosen, and roms that already exist on the device are not re-exported, allowing you to simply update a device with newly-added roms.",
 		80, "- ", "  "))
