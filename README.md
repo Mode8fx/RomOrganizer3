@@ -17,31 +17,31 @@ This is the successor to Rom Organizer and Rom Organizer Deluxe, including many 
 
 Check the included settings.ini file for a full list of customizable settings.
 
-##### Multiple romset types
+#### Multiple romset types
 Export the following types of romsets on a per-system basis:
 - Merged (one folder is created for each game, containing all versions of that game)
 - 1G1R (1 Game 1 Rom; one folder is created for each game, containing only the "best" version of a game; ideally, the latest non-demo revision from your region)
 - 1G1R Primary (same as 1G1R, but any games that do not have a version from your main region(s) are skipped)
 
-##### Auto-renaming
+#### Auto-renaming
 Misnamed roms are automatically renamed using the matching CRC hash found in the included No-Intro DAT files (you can also download your own DAT files from the links above); this applies to both the rom itself and, if applicable, a ZIP file containing the rom. (Not compatible with Redump due to the common compression methods used for disc-based games)
 
-##### Header-agnostic hashing
+#### Header-agnostic hashing
 For systems that use headered roms (like NES), you have the option to exclude the header during hashing. This allows you to verify headered roms using a DAT file for unheadered roms.
 
-##### Region sorting
+#### Region sorting
 Games are sorted by region, in descending order of priority; for example, if your regions are sorted as USA>Europe>Japan, and a game has European and Japanese roms but not USA, that game's folder is placed in the Europe folder. You also have the option of exporting games from your primary region(s) to the root folder instead of a subfolder. See the bottom of this readme for an example.
 
-##### Special categories
+#### Special categories
 Certain games are organized into additional subfolders based on their names, such as "Compilation" and "GBA Video", with the option to skip these folders and their games during export. You can define your own categories in the settings.ini file.
 
-##### Support for unverified roms
+#### Support for unverified roms
 In addition to exporting your verified roms following the preferences you've defined, you can also copy all files from a secondary folder onto your device, which is useful if you have a separate folder for things like rom hacks or homebrew.
 
-##### Keep your devices in parity
+#### Keep your devices in parity
 Additionally, you can also copy any files that only exist in your target device's rom folder (and not in your main or secondary folder) back into a separate folder, which you can manually review and copy back into your main/secondary folder. This way, you won't have to remember what files you've added to each device individually; they'll all stay up to date.
 
-##### Log files
+#### Log files
 Finally, this will create logs that track what files are missing from your local romset as indicated by the DAT files, along with logs of what files were copied to/from your target drive.
 
 ### Device Profile
