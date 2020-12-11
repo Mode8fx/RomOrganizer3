@@ -416,7 +416,7 @@ def createMainConfig():
 		"Undumped Japanese Download Station", "WiiWare Broadcast",
 		"Disk Writer", "Collection of Mana", "Namco Museum Archives Vol 1",
 		"Namco Museum Archives Vol 2", "Castlevania Anniversary Collection",
-		"Nintendo Switch", "NP"
+		"Nintendo Switch", "NP", "Genesis Mini", "Mega Drive Mini"
 		])
 	mainConfig["Special ROM Attributes (Advanced)"]["Starters"] = "|".join([
 		"Rev", "Disc", "Beta", "Demo", "Sample", "Proto", "Alt", "Earlier",
@@ -696,6 +696,10 @@ def mainExport():
 	else:
 		updateSecondaryChoice = makeChoice("Test update of \""+path.basename(updateFromDeviceFolder)+"\" folder by checking which files are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
 	outputFolder = askForDirectory("\nSelect the ROM directory of your "+deviceName+" (example: F:/Roms).")
+	if outputFolder == "":
+		print("Action cancelled.")
+		sleep(1)
+		return
 	initScreen()
 	numCopiedBytesMain = 0
 	numCopiedBytesSecondary = 0
@@ -733,7 +737,8 @@ def mainExport():
 			updateSecondary()
 	print("\n====================")
 	print("\nTotal Export Size: "+simplifyNumBytes(numCopiedBytesMain+numCopiedBytesSecondary))
-	print("\nReview the log files for more information on what files were exchanged between the main drive and "+deviceName+".")
+	print("\nReview the log files for more information on what files "+("were" if isExport else "would be")+" exchanged between the main drive and "+deviceName+".")
+	print("\nLog files are not created for systems that "+("do" if isExport else "would")+" not receive any new files.")
 	sleep(1)
 	inputHidden("Press Enter to return to the main menu.")
 
@@ -999,8 +1004,8 @@ def copyMainRomset(romsetCategory, isRedump):
 			else:
 				numRomsSkipped += 1
 	progressBar.close()
+	createMainCopiedLog(romsCopied, romsFailed, "Export" if isExport else "Test")
 	if isExport:
-		createMainCopiedLog(romsCopied, romsFailed)
 		print("\nCopied "+str(len(romsCopied))+" new files.")
 		print("Skipped "+str(numRomsSkipped)+" files that already exist on this device.")
 		print("Failed to copy "+str(len(romsFailed))+" new files.")
@@ -1019,11 +1024,11 @@ def getSpecialFoldersForGame(game):
 				break
 	return currSpecialFolders
 
-def createMainCopiedLog(romsCopied, romsFailed):
+def createMainCopiedLog(romsCopied, romsFailed, logType="Export"):
 	if len(romsCopied) + len(romsFailed) > 0:
 		romsCopied.sort()
 		romsFailed.sort()
-		romsetLogFile = open(path.join(logFolder, "Log - Romset (to "+deviceName+") - "+systemName+".txt"), "w", encoding="utf-8", errors="replace")
+		romsetLogFile = open(path.join(logFolder, logType+" Main ("+systemName+") ("+deviceName+") ["+str(len(romsCopied))+"] ["+str(len(romsFailed))+"].txt"), "w", encoding="utf-8", errors="replace")
 		romsetLogFile.writelines("=== Copied "+str(len(romsCopied))+" new ROMs from "+systemName+" to "+deviceName+" ===\n\n")
 		for file in romsCopied:
 			romsetLogFile.writelines(file+"\n")
@@ -1071,8 +1076,8 @@ def copySecondaryRomset():
 			else:
 				numFilesSkipped += 1
 	progressBar.close()
+	createSecondaryCopiedLog(filesCopied, filesFailed, "Export" if isExport else "Test")
 	if isExport:
-		createSecondaryCopiedLog(filesCopied, filesFailed)
 		print("\nCopied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+".")
 		print("Skipped "+str(numFilesSkipped)+pluralize(" file", numFilesSkipped)+" that already exist on this device.")
 		print("Failed to copy "+str(len(filesFailed))+" new "+pluralize("file", len(filesFailed))+".")
@@ -1082,11 +1087,11 @@ def copySecondaryRomset():
 	print("Export Size: "+simplifyNumBytes(currNumCopiedBytes)+" of new files.")
 	return currNumCopiedBytes
 
-def createSecondaryCopiedLog(filesCopied, filesFailed):
+def createSecondaryCopiedLog(filesCopied, filesFailed, logType="Export"):
 	updateFolderName = path.basename(updateFromDeviceFolder)
-	if len(filesCopied) > 0:
+	if len(filesCopied) + len(filesFailed) > 0:
 		filesCopied.sort()
-		otherLogFile = open(path.join(logFolder, "Log - "+updateFolderName+" (to "+deviceName+").txt"), "w", encoding="utf-8", errors="replace")
+		otherLogFile = open(path.join(logFolder, logType+" Secondary ("+systemName+") ("+deviceName+") ["+str(len(filesCopied))+"] ["+str(len(filesFailed))+"].txt"), "w", encoding="utf-8", errors="replace")
 		otherLogFile.writelines("=== Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+" from "+updateFolderName+" to "+deviceName+" ===\n\n")
 		for file in filesCopied:
 			otherLogFile.writelines(file+"\n")
@@ -1123,7 +1128,7 @@ def updateSecondary():
 						createDir(updateFolder)
 						shutil.copy(fileInOutput, fileInUpdate)
 					# print("From "+deviceName+" to "+updateFolderName+": "+fileInUpdate)
-					currNumCopiedBytes += path.getsize(sourceRomPath)
+					currNumCopiedBytes += path.getsize(fileInOutput)
 					filesCopied.append(fileInUpdate)
 				except:
 					# print("Failed to copy: "+fileInOutput)
@@ -1131,8 +1136,8 @@ def updateSecondary():
 	# print("\nUpdated "+updateFolderName+" folder with "+str(len(filesCopied))+" new files.")
 	# print("\nRemoving empty folders from "+updateFolderName+"...")
 	removeEmptyFolders(updateFromDeviceFolder)
+	createUpdateToSecondaryLog(filesCopied, filesFailed, "Update" if isExport else "Test Update")
 	if isExport:
-		createUpdateToSecondaryLog(filesCopied, filesFailed)
 		print("\nCopied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+".")
 		print("Skipped "+str(numFilesSkipped)+pluralize(" file", numFilesSkipped)+" that already exist on this device.")
 		print("Failed to copy "+str(len(filesFailed))+" new "+pluralize("file", len(filesFailed))+".")
@@ -1142,11 +1147,11 @@ def updateSecondary():
 	print("Export Size: "+simplifyNumBytes(currNumCopiedBytes)+" of new files.")
 	return currNumCopiedBytes
 
-def createUpdateToSecondaryLog(filesCopied, filesFailed):
+def createUpdateToSecondaryLog(filesCopied, filesFailed, logType="Update"):
 	updateFolderName = path.basename(updateFromDeviceFolder)
-	if len(filesCopied):
+	if len(filesCopied) + len(filesFailed) > 0:
 		filesCopied.sort()
-		otherLogFile = open(path.join(logFolder, "Log - "+updateFolderName+" (from "+deviceName+").txt"), "w", encoding="utf-8", errors="replace")
+		otherLogFile = open(path.join(logFolder, logType+" ("+deviceName+") ["+str(len(filesCopied))+"] ["+str(len(filesFailed))+"].txt"), "w", encoding="utf-8", errors="replace")
 		otherLogFile.writelines("=== Copied "+str(len(filesCopied))+" new "+pluralize("file", len(filesCopied))+" from "+deviceName+" to "+updateFolderName+" ===\n\n")
 		for file in filesCopied:
 			otherLogFile.writelines(file+"\n")
