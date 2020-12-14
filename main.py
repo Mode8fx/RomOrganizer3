@@ -422,7 +422,7 @@ def createMainConfig():
 		"Kunio-kun Nekketsu Collection"
 		])
 	mainConfig["Special Folders"]["BIOS"] = "|".join([
-		"[BIOS]"
+		"BIOS"
 		])
 	# Special ROM Attributes
 	mainConfig["Special ROM Attributes (Advanced)"] = {}
@@ -947,6 +947,8 @@ def getScore(rom):
 
 def getAttributeSplit(name):
 	mna = [s.strip() for s in re.split('\(|\)|\[|\]', path.splitext(name)[0]) if s.strip() != ""]
+	if name.startswith("[BIOS]") and len(mna) > 1:
+		mna[:2] = ["[BIOS] "+mna[1]]
 	mergeNameArray = []
 	mergeNameArray.append(mna[0])
 	if len(mna) > 1:
