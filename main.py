@@ -51,6 +51,7 @@ def main():
 			"Export romset",
 			"Test export of romset",
 			"Help",
+			"Credits",
 			"Exit"])
 		if choice == 1:
 			setMainRomFolder()
@@ -71,6 +72,8 @@ def main():
 			mainExport()
 		elif choice == 8:
 			printHelp()
+		elif choice == 9:
+			printCredits()
 		else:
 			clearScreen()
 			sys.exit()
@@ -107,11 +110,11 @@ def updateAndAuditVerifiedRomsets():
 					continue
 		romsetsToVerify.append(currSystemName)
 	if len(romsetsToVerify) == 0:
-		print("No .DAT files found for any of the system folders in "+currRomsetFolder)
+		print(limitedString("No .DAT files found for any of the system folders in "+currRomsetFolder))
 		inputHidden("Press Enter to continue.")
 		return
 	print("Database (.DAT) files found for the following system(s).")
-	sc = makeChoice("Select romset(s). You can select multiple choices by separating them with spaces:", romsetsToVerify+["All", "None"], allowMultiple=True)
+	sc = makeChoice("Select romset(s). You can select multiple choices by separating them with\nspaces:", romsetsToVerify+["All", "None"], allowMultiple=True)
 	if len(romsetsToVerify)+2 in sc:
 		systemChoices = []
 	elif len(romsetsToVerify)+1 in sc:
@@ -511,7 +514,7 @@ def createDeviceProfile():
 	print("\nFollow these steps to create a new device profile.")
 	skipSecondary = False
 	if secondaryRomFolder == "":
-		choice = makeChoice("Are you using a secondary rom folder containing unverified files such as hacks,\nhomebrew, etc.?", ["Yes, I have a secondary folder", "No, verified roms only"])
+		choice = makeChoice(limitedString("Are you using a secondary rom folder containing unverified files such as hacks, homebrew, etc.?"), ["Yes, I have a secondary folder", "No, verified roms only"])
 		if choice == 1:
 			print("Go back to the main menu and select \"Set secondary ROM folder\".")
 			inputHidden("Press Enter to continue.")
@@ -686,11 +689,11 @@ def setSecondaryRomFolder():
 
 def verifyMainRomFolder():
 	if mainRomFolder == "":
-		print("You have not set a main ROM folder. Go back to the main menu and select \"Set main ROM folder\".")
+		print(limitedString("You have not set a main ROM folder. Go back to the main menu and select \"Set main ROM folder\"."))
 		inputHidden("Press Enter to continue.")
 		return False
 	if not path.isdir(mainRomFolder):
-		print("The main ROM folder found in settings.ini is invalid. Go back to the main menu and select \"Set main ROM folder\".")
+		print(limitedString("The main ROM folder found in settings.ini is invalid. Go back to the main menu and select \"Set main ROM folder\"."))
 		inputHidden("Press Enter to continue.")
 		return False
 	return True
@@ -717,7 +720,7 @@ def mainExport():
 			print("The current profile does not allow any romsets.")
 		systemChoices = []
 	else:
-		systemChoices = makeChoice("Select romset(s). You can select multiple choices by separating them with spaces:", currProfileMainDirs+["All", "None"], allowMultiple=True)
+		systemChoices = makeChoice("Select romset(s). You can select multiple choices by separating them with\nspaces:", currProfileMainDirs+["All", "None"], allowMultiple=True)
 		if len(currProfileMainDirs)+2 in systemChoices:
 			systemChoices = []
 		elif len(currProfileMainDirs)+1 in systemChoices:
@@ -730,16 +733,16 @@ def mainExport():
 				print("The current profile does not allow any "+secondaryFolderName+" folders.")
 			secondaryChoices = []
 		else:
-			secondaryChoices = makeChoice("Select system(s) from "+secondaryFolderName+" folder. You can select multiple choices by separating them with spaces:", currProfileSecondaryDirs+["All", "None"], allowMultiple=True)
+			secondaryChoices = makeChoice(limitedString("Select system(s) from "+secondaryFolderName+" folder. You can select multiple choices by separating them with spaces:"), currProfileSecondaryDirs+["All", "None"], allowMultiple=True)
 			if len(currProfileSecondaryDirs)+2 in secondaryChoices:
 				secondaryChoices = []
 			elif len(currProfileSecondaryDirs)+1 in secondaryChoices:
 				secondaryChoices = list(range(1, len(currProfileSecondaryDirs)+1))
 	if isExport:
-		updateSecondaryChoice = makeChoice("Update \""+path.basename(updateFromDeviceFolder)+"\" folder by adding any files that are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
+		updateSecondaryChoice = makeChoice(limitedString("Update \""+path.basename(updateFromDeviceFolder)+"\" folder by adding any files that are currently exclusive to the ROM folder in "+deviceName+"?"), ["Yes", "No"])
 	else:
-		updateSecondaryChoice = makeChoice("Test update of \""+path.basename(updateFromDeviceFolder)+"\" folder by checking which files are currently exclusive to the ROM folder in "+deviceName+"?", ["Yes", "No"])
-	outputFolder = askForDirectory("\nSelect the ROM directory of your "+deviceName+" (example: F:/Roms).")
+		updateSecondaryChoice = makeChoice(limitedString("Test update of \""+path.basename(updateFromDeviceFolder)+"\" folder by checking which files are currently exclusive to the ROM folder in "+deviceName+"?"), ["Yes", "No"])
+	outputFolder = askForDirectory("\n"+limitedString("Select the ROM directory of your "+deviceName+" (example: F:/Roms)."))
 	if outputFolder == "":
 		print("Action cancelled.")
 		sleep(1)
@@ -750,6 +753,9 @@ def mainExport():
 	for sc in systemChoices:
 		systemName = currProfileMainDirs[sc-1]
 		print("\n====================\n\n"+systemName)
+		if not path.exists(path.join(mainRomFolder, systemName)):
+			print("System folder not found in main rom folder.")
+			continue
 		romsetCategory = deviceConfig["Main Romsets"][systemName]
 		isRedump = False
 		currSystemDAT = path.join(noIntroDir, systemName+".dat")
@@ -774,6 +780,9 @@ def mainExport():
 			print("\n====================\n\n"+systemName)
 			secondaryCategory = deviceConfig["Secondary Romsets"][systemName]
 			if secondaryCategory == "Yes":
+				if not path.exists(path.join(secondaryRomFolder, systemName)):
+					print("System folder not found in secondary rom folder.")
+					continue
 				numCopiedBytesSecondary += copySecondaryRomset()
 		print("\n====================\n\nSecondary Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesSecondary))
 	if updateFromDeviceFolder != "":
@@ -782,7 +791,7 @@ def mainExport():
 			updateSecondary()
 	print("\n====================")
 	print("\nTotal Export Size: "+simplifyNumBytes(numCopiedBytesMain+numCopiedBytesSecondary))
-	print("\nReview the log files for more information on what files "+("were" if isExport else "would be")+" exchanged between the main drive and "+deviceName+".")
+	print("\n"+limitedString("Review the log files for more information on what files "+("were" if isExport else "would be")+" exchanged between the main drive and "+deviceName+"."))
 	print("Log files are not created for systems that "+("do" if isExport else "would")+" not receive any new files.")
 	sleep(1)
 	recentlyVerified = True
@@ -1363,6 +1372,20 @@ def printHelp():
 	print(limitedString("This is useful if you want to know how much space an export would require before exporting to a device with little free space.",
 		80, "- ", "  "))
 	inputHidden("\nPress Enter to continue.")
+
+def printCredits():
+	clearScreen()
+	print("\nRom Organizer 3")
+	print("Made by GateGuy")
+	print("https://github.com/GateGuy/RomOrganizer3")
+	print("\nNo-Intro (DAT-o-MATIC) DAT files")
+	print("Made by No-Intro")
+	print("https://no-intro.org/")
+	print("https://datomatic.no-intro.org/")
+	print("\nRedump DAT files")
+	print("Made by Redump Team")
+	print("http://redump.org/")
+	inputHidden("")
 
 if __name__ == '__main__':
 	main()
