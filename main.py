@@ -34,11 +34,13 @@ logFolder = path.join(progFolder, "Logs")
 
 def main():
 	global isExport
+	global recentlyVerified
 	prepareMainConfig()
 	createDir(noIntroDir)
 	createDir(redumpDir)
 	createDir(profilesFolder)
 	createDir(logFolder)
+	recentlyVerified = False
 	while True:
 		initScreen()
 		choice = makeChoice("Select an option.", [
@@ -79,7 +81,7 @@ def main():
 ####################
 
 def updateAndAuditVerifiedRomsets():
-	global allGameNamesInDAT, romsWithoutCRCMatch, progressBar
+	global allGameNamesInDAT, romsWithoutCRCMatch, progressBar, recentlyVerified
 	initScreen()
 	currRomsetFolder = askForDirectory("Select the rom directory you would like to update/audit.\nThis is the directory that contains all of your system folders.")
 	if currRomsetFolder == "":
@@ -118,7 +120,10 @@ def updateAndAuditVerifiedRomsets():
 	else:
 		systemChoices = [romsetsToVerify[choice-1] for choice in sc]
 
-	moveUnverified = makeChoice("In the event that unverified roms (roms without a matching database CRC) are\nfound, would you like to automatically move these to an \"[Unverified]\"\nsubfolder within the system folder?", ["Yes", "No"])
+	if currRomsetFolder != mainRomFolder:
+		moveUnverified = makeChoice("In the event that unverified roms (roms without a matching database CRC) are\nfound, would you like to automatically move these to an \"[Unverified]\"\nsubfolder within the system folder?", ["Yes", "No"])
+	else:
+		moveUnverified = 2
 	for currSystemName in systemChoices:
 		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
@@ -195,6 +200,7 @@ def updateAndAuditVerifiedRomsets():
 						pass
 				print("Moved "+str(numMoved)+" of these file(s) to \"[Unverified]\" subfolder in system directory.")
 
+	recentlyVerified = True
 	inputHidden("\nDone. Press Enter to continue.")
 
 def getCRC(filePath, headerLength=0):
@@ -327,7 +333,7 @@ def renameArchiveAndContent(archivePath, newName):
 ############################
 
 def prepareMainConfig():
-	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, sources, starters
+	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, keywords, sources, starters
 	if not path.exists(mainConfigFile):
 		createMainConfig()
 	mainConfig = configparser.ConfigParser(allow_no_value=True)
@@ -335,6 +341,7 @@ def prepareMainConfig():
 	mainConfig.read(mainConfigFile)
 	mainRomFolder = mainConfig["ROM Folders"]["Main ROM Folder"]
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
+	keywords = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"])
 	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	starters = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"])
 	try:
@@ -691,13 +698,14 @@ def verifyMainRomFolder():
 ##########
 
 def mainExport():
-	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, deviceName, systemName, outputFolder
+	global mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, deviceName, systemName, outputFolder, recentlyVerified
 	initScreen()
 	if not verifyMainRomFolder():
 		return
-	choice = makeChoice(limitedString("If you haven't done so already, it is recommended that you update/audit your verified romsets whenever you add new roms (or if this is your first time running this program). This will make sure your rom names match those in the DAT files."), ["I already did this", "Back to menu"])
-	if choice == 2:
-		return
+	if not recentlyVerified:
+		choice = makeChoice(limitedString("If you haven't done so already, it is recommended that you update/audit your verified romsets whenever you add new roms (or if this is your first time running this program). This will make sure your rom names match those in the DAT files."), ["I already did this", "Back to menu"])
+		if choice == 2:
+			return
 	if not selectDeviceProfile():
 		return
 
@@ -772,9 +780,10 @@ def mainExport():
 	print("\n====================")
 	print("\nTotal Export Size: "+simplifyNumBytes(numCopiedBytesMain+numCopiedBytesSecondary))
 	print("\nReview the log files for more information on what files "+("were" if isExport else "would be")+" exchanged between the main drive and "+deviceName+".")
-	print("\nLog files are not created for systems that "+("do" if isExport else "would")+" not receive any new files.")
+	print("Log files are not created for systems that "+("do" if isExport else "would")+" not receive any new files.")
 	sleep(1)
-	inputHidden("Press Enter to return to the main menu.")
+	recentlyVerified = True
+	inputHidden("\nPress Enter to return to the main menu.")
 
 def generateGameRomDict(currSystemDAT):
 	global gameRomDict
@@ -932,17 +941,21 @@ def getScore(rom):
 				score -= (50 - int(att.split()[1]))
 			except:
 				score -= 49
-		elif att.startswith("Sample") or att.startswith("Demo") or att.startswith("Promo"):
+		elif att.startswith("Sample") or att.startswith("Demo"):
 			try:
 				score -= (90 - int(att.split()[1]))
 			except:
 				score -= 89
-		if "Collection" in att:
+		elif "Collection" in att:
 			score -= 10
-		if "DLC" in att:
-			score -= 9
-		if att in sources:
+		elif att in sources:
 			score -= 10
+		elif "DLC" in att:
+			score -= 10
+		elif att in ["Unl", "Pirate"]:
+			score -= 20
+		elif not (att in keywords or att in sources or any(att.startswith(starter) for starter in starters)): # a tiebreaker for any new keywords that are later added
+			score -= 1
 	return score
 
 def getAttributeSplit(name):
