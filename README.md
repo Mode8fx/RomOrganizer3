@@ -19,7 +19,7 @@ Check the included settings.ini file for a full list of customizable settings.
 
 #### Multiple romset types
 Export the following types of romsets on a per-system basis:
-- Merged (one folder is created for each game, containing all versions of that game)
+- Full (one folder is created for each game, containing all versions of that game)
 - 1G1R (1 Game 1 Rom; one folder is created for each game, containing only the "best" version of a game; ideally, the latest non-demo revision from your region)
 - 1G1R Primary (same as 1G1R, but any games that do not have a version from your main region(s) are skipped)
 
