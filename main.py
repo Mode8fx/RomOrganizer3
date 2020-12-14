@@ -332,7 +332,7 @@ def renameArchiveAndContent(archivePath, newName):
 ############################
 
 def prepareMainConfig():
-	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, keywords, sources, starters
+	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, sources, starters # , keywords
 	if not path.exists(mainConfigFile):
 		createMainConfig()
 	mainConfig = configparser.ConfigParser(allow_no_value=True)
@@ -340,7 +340,7 @@ def prepareMainConfig():
 	mainConfig.read(mainConfigFile)
 	mainRomFolder = mainConfig["ROM Folders"]["Main ROM Folder"]
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
-	keywords = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"])
+	# keywords = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"])
 	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	starters = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"])
 	try:
@@ -438,13 +438,15 @@ def createMainConfig():
 		100, "# ", "#    "))
 	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("Parentheses field are also ignored if they start with a \"Starter\". For example, \"Rev\" includes (Rev 1), (Rev 2), (Rev A), ...",
 		100, "# ", "#    "))
+	mainConfig.set('Special ROM Attributes (Advanced)', limitedString("You shouldn't have to change these, but they're here in case you do.",
+		100, "# ", "#    "))
 	mainConfig.set('Special ROM Attributes (Advanced)', '###')
-	mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
-		"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
-		"Club Nintendo", "Aftermarket", "Test Program", "Competition Cart",
-		"NES Test", "Promotion Card", "Program", "Manual", "NDSi Enhanced",
-		"Wi-Fi Kiosk"
-		])
+	# mainConfig["Special ROM Attributes (Advanced)"]["Keywords"] = "|".join([
+	# 	"Unl", "Pirate", "PAL", "NTSC", "GB Compatible", "SGB Enhanced",
+	# 	"Club Nintendo", "Aftermarket", "Test Program", "Competition Cart",
+	# 	"NES Test", "Promotion Card", "Program", "Manual", "NDSi Enhanced",
+	# 	"Wi-Fi Kiosk"
+	# 	])
 	mainConfig["Special ROM Attributes (Advanced)"]["Sources"] = "|".join([
 		"Virtual Console", "Switch Online", "GameCube", "Namcot Collection",
 		"Namco Museum Archives", "Kiosk", "iQue", "Sega Channel", "WiiWare",
@@ -762,6 +764,7 @@ def mainExport():
 				if not path.exists(currSystemDAT):
 					print("Database file not found for "+systemName+".")
 					continue
+		checkSystemDATForClones(currSystemDAT)
 		generateGameRomDict(currSystemDAT)
 		numCopiedBytesMain += copyMainRomset(romsetCategory, isRedump)
 	print("\n====================\n\nMain Romsets\nExport Size: "+simplifyNumBytes(numCopiedBytesMain))
@@ -785,10 +788,24 @@ def mainExport():
 	recentlyVerified = True
 	inputHidden("\nPress Enter to return to the main menu.")
 
+def checkSystemDATForClones(currSystemDAT):
+	global currSystemHasClones
+	tempTree = ET.parse(currSystemDAT)
+	tempTreeRoot = tempTree.getroot()
+	tempAllGameFields = tempTreeRoot[1:]
+	for game in tempAllGameFields:
+		gameName = game.get("name")
+		try:
+			gameCloneOf = game.get("cloneof")
+		except:
+			gameCloneOf = None
+		if gameCloneOf is not None:
+			currSystemHasClones = True
+			return
+	currSystemHasClones = False
+
 def generateGameRomDict(currSystemDAT):
-	global gameRomDict
-	global newGameRomDict
-	global allGameFields
+	global gameRomDict, newGameRomDict, allGameFields
 	gameRomDict = {}
 	systemFolder = path.join(mainRomFolder, systemName)
 	tree = ET.parse(currSystemDAT)
@@ -954,7 +971,7 @@ def getScore(rom):
 			score -= 10
 		elif att in ["Unl", "Pirate"]:
 			score -= 20
-		elif not (att in keywords or att in sources or any(att.startswith(starter) for starter in starters)): # a tiebreaker for any new keywords that are later added
+		elif not (att in sources or any(att.startswith(starter) for starter in starters)): # a tiebreaker for any new keywords that are later added # or att in keywords
 			score -= 1
 	return score
 
@@ -978,7 +995,7 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 	global newGameRomDict
 	firstBestRoms, firstRegionNum, _ = getRomsInBestRegion(firstGameRoms)
 	secondBestRoms, secondRegionNum, _ = getRomsInBestRegion(secondGameRoms)
-	if firstRegionNum != secondRegionNum:
+	if currSystemHasClones and (firstRegionNum != secondRegionNum):
 		newFirstGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[firstRegionNum]+")"
 		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		# print("Renamed "+sharedName+" to "+newFirstGameName)
@@ -1008,7 +1025,7 @@ def getUniqueAttributes(firstRom, secondRom):
 	except:
 		pass
 	for att in firstAtts:
-		if att in secondAtts or att in sources:
+		if att in secondAtts or att in sources or attIsRegion(att):
 			continue
 		if att.startswith("v") and len(att) > 1 and att[1].isdigit():
 			continue
@@ -1018,7 +1035,7 @@ def getUniqueAttributes(firstRom, secondRom):
 			firstUniqueAtts.append(att)
 	secondUniqueAtts = []
 	for att in secondAtts:
-		if att in firstAtts or att in sources:
+		if att in firstAtts or att in sources or attIsRegion(att):
 			continue
 		if att.startswith("v") and len(att) > 1 and att[1].isdigit():
 			continue
@@ -1032,6 +1049,12 @@ def getUniqueAttributes(firstRom, secondRom):
 		elif "Proto" in secondUniqueAtts:
 			secondUniqueAtts.remove("Proto")
 	return firstUniqueAtts, secondUniqueAtts
+
+def attIsRegion(att):
+	for region in mainConfig["Regions"]:
+		if att in barSplit(mainConfig["Regions"][region]):
+			return True
+	return False
 
 def copyMainRomset(romsetCategory, isRedump):
 	global gameRomDict, progressBar
@@ -1085,8 +1108,8 @@ def copyMainRomset(romsetCategory, isRedump):
 						romsCopied.append(rom)
 					except:
 						# progressBar.write("\nFailed to copy: "+rom)
-						if createdFolder and len(listdir(createdFolder)) == 0:
-							rmdir(createdFolder)
+						if createdFolder and len(listdir(currGameFolder)) == 0:
+							rmdir(currGameFolder)
 						romsFailed.append(rom)
 				else:
 					numRomsSkipped += 1
@@ -1102,8 +1125,8 @@ def copyMainRomset(romsetCategory, isRedump):
 					romsCopied.append(bestRom)
 				except:
 					# progressBar.write("\nFailed to copy: "+bestRom)
-					if createdFolder and len(listdir(createdFolder)) == 0:
-						rmdir(createdFolder)
+					if createdFolder and len(listdir(currGameFolder)) == 0:
+						rmdir(currGameFolder)
 					romsFailed.append(bestRom)
 			else:
 				numRomsSkipped += 1
