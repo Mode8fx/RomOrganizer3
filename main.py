@@ -86,8 +86,40 @@ def updateAndAuditVerifiedRomsets():
 		print("Action cancelled.")
 		sleep(1)
 		return
-	moveUnverified = makeChoice("In the event that unverified roms (roms without a matching database CRC) are\nfound, would you like to automatically move these to an \"[Unverified]\"\nsubfolder within the system folder?", ["Yes", "No"])
+
+	romsetsToVerify = []
 	for currSystemName in listdir(currRomsetFolder):
+		currSystemFolder = path.join(currRomsetFolder, currSystemName)
+		if not path.isdir(currSystemFolder):
+			continue
+		isNoIntro = True
+		currSystemDAT = path.join(noIntroDir, currSystemName+".dat")
+		if not path.exists(currSystemDAT):
+			isNoIntro = False
+			currSystemDAT = path.join(redumpDir, currSystemName+".dat")
+			if not path.exists(currSystemDAT):
+				for file in listdir(redumpDir):
+					if path.splitext(file)[0].split(" - Datfile")[0] == currSystemName:
+						currSystemDAT = path.join(redumpDir, file)
+						break
+				if not path.exists(currSystemDAT):
+					continue
+		romsetsToVerify.append(currSystemName)
+	if len(romsetsToVerify) == 0:
+		print("No .DAT files found for any of the system folders in "+currRomsetFolder)
+		inputHidden("Press Enter to continue.")
+		return
+	print("Database (.DAT) files found for the following system(s).")
+	sc = makeChoice("Select romset(s). You can select multiple choices by separating them with spaces:", romsetsToVerify+["All", "None"], allowMultiple=True)
+	if len(romsetsToVerify)+2 in sc:
+		systemChoices = []
+	elif len(romsetsToVerify)+1 in sc:
+		systemChoices = romsetsToVerify
+	else:
+		systemChoices = [romsetsToVerify[choice-1] for choice in sc]
+
+	moveUnverified = makeChoice("In the event that unverified roms (roms without a matching database CRC) are\nfound, would you like to automatically move these to an \"[Unverified]\"\nsubfolder within the system folder?", ["Yes", "No"])
+	for currSystemName in systemChoices:
 		currSystemFolder = path.join(currRomsetFolder, currSystemName)
 		if not path.isdir(currSystemFolder):
 			continue
@@ -295,7 +327,7 @@ def renameArchiveAndContent(archivePath, newName):
 ############################
 
 def prepareMainConfig():
-	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs
+	global mainConfig, mainRomFolder, secondaryRomFolder, mainSystemDirs, secondarySystemDirs, sources, starters
 	if not path.exists(mainConfigFile):
 		createMainConfig()
 	mainConfig = configparser.ConfigParser(allow_no_value=True)
@@ -303,9 +335,8 @@ def prepareMainConfig():
 	mainConfig.read(mainConfigFile)
 	mainRomFolder = mainConfig["ROM Folders"]["Main ROM Folder"]
 	secondaryRomFolder = mainConfig["ROM Folders"]["Secondary ROM Folder"]
-	# regions = [key for key in mainConfig["Regions"]]
-	# specialFolders = barSplit(mainConfig["Special Folders"])
-	# specialAttributes = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Keywords"]) + barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
+	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
+	starters = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"])
 	try:
 		mainSystemDirs = [d for d in listdir(mainRomFolder) if path.isdir(path.join(mainRomFolder, d))]
 	except:
@@ -664,6 +695,9 @@ def mainExport():
 	initScreen()
 	if not verifyMainRomFolder():
 		return
+	choice = makeChoice(limitedString("If you haven't done so already, it is recommended that you update/audit your verified romsets whenever you add new roms (or if this is your first time running this program). This will make sure your rom names match those in the DAT files."), ["I already did this", "Back to menu"])
+	if choice == 2:
+		return
 	if not selectDeviceProfile():
 		return
 
@@ -776,20 +810,22 @@ def generateGameRomDict(currSystemDAT):
 		bestGameName = getBestGameName(gameRomDict[game])
 		mergeBoth = False
 		if bestGameName in newGameRomDict: # same name for two different games (Pokemon Stadium International vs. Japan)
-			originalBestGameName = bestGameName
-			bestGameName, mergeBoth = fixDuplicateName(newGameRomDict[bestGameName], gameRomDict[game], bestGameName)
-			if mergeBoth:
-				for rom in gameRomDict[game]:
-					newGameRomDict[originalBestGameName].append(rom)
-			else:
-				newGameRomDict[bestGameName] = gameRomDict[game]
+			finalFirstGameName, finalSecondGameName, renameByAtts = fixDuplicateName(newGameRomDict[bestGameName], gameRomDict[game], bestGameName)
+			if renameByAtts: # rename first game according to region
+				newGameRomDict[finalFirstGameName] = newGameRomDict.pop(bestGameName)
+				newGameRomDict[finalSecondGameName] = gameRomDict[game]
+			else: # rename neither (merge the two together); rare, but possible, such as DS demos that have both a DS Download Station and a Nintendo Channel version
+				for rom in gameRomDict[game]: # rename one or both games according to 
+					newGameRomDict[bestGameName].append(rom)
 		else:
 			newGameRomDict[bestGameName] = gameRomDict[game]
 	gameRomDict = newGameRomDict
 	# for game in sorted(gameRomDict.keys()):
-	# 	# print("    ", game, gameRomDict[game])
 	# 	print(game)
+	# 	for rom in gameRomDict[game]:
+	# 		print(limitedString(rom, 80, "  - ", "    "))
 	# inputHidden(" ")
+	# sys.exit()
 
 def addGameAndRomToDict(game, rom):
 	global gameRomDict
@@ -800,21 +836,24 @@ def addGameAndRomToDict(game, rom):
 def getBestGameName(roms):
 	bestRom, _ = getBestRom(roms)
 	atts = getAttributeSplit(bestRom)
-	bestGameName = atts[0]
-	if len(atts) == 1:
-		return bestGameName
-	attributes = atts[1:]
-	for att in attributes:
-		keepAtt = keepAttribute(att)
-		if keepAtt:
-			bestGameName += " ("+att+")"
-	return bestGameName.rstrip(".")
+	# bestGameName = atts[0]
+	# if len(atts) == 1:
+	# 	return bestGameName.rstrip(".")
+	# attributes = atts[1:]
+	# for att in attributes:
+	# 	keepAtt = keepAttribute(att)
+	# 	if keepAtt:
+	# 		bestGameName += " ("+att+")"
+	# return bestGameName.rstrip(".")
+	return atts[0].rstrip(".")
 
-def keepAttribute(att):
-	for keyword in barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Starters"]):
+def keepAttribute(att): # unused
+	for keyword in starters:
 		if att.startswith(keyword):
 			return False
 	if att.startswith("v") and len(att) > 1 and att[1].isdigit():
+		return False
+	if att.startswith("b") and (len(att) == 1 or att[1].isdigit()):
 		return False
 	for region in mainConfig["Regions"]:
 		if att in barSplit(mainConfig["Regions"][region]):
@@ -867,19 +906,27 @@ def getScore(rom):
 	attributes = getAttributeSplit(rom)[1:]
 	score = 100
 	lastVersion = 0
-	sources = barSplit(mainConfig["Special ROM Attributes (Advanced)"]["Sources"])
 	for att in attributes:
 		if att.startswith("Rev") or att.startswith("Reprint"):
 			try:
 				score += 15 + (15 * int(att.split()[1]))
 			except:
 				score += 30
-		elif att.startswith("v"):
+		elif att.startswith("v") and len(att) > 1 and att[1].isdigit():
 			try:
 				score += float(att[1:])
 				lastVersion = float(att[1:])
 			except:
 				score += lastVersion
+		elif att.startswith("b") and (len(att) == 1 or att[1].isdigit()):
+			if len(att) == 1:
+				score -= 30
+			else:
+				try:
+					score -= (15 - float(att[1:]))
+					lastVersion = float(att[1:])
+				except:
+					score -= (15 - lastVersion)
 		elif att.startswith("Beta") or att.startswith("Proto"):
 			try:
 				score -= (50 - int(att.split()[1]))
@@ -899,7 +946,7 @@ def getScore(rom):
 	return score
 
 def getAttributeSplit(name):
-	mna = [s.strip() for s in re.split('\(|\)', path.splitext(name)[0]) if s.strip() != ""]
+	mna = [s.strip() for s in re.split('\(|\)|\[|\]', path.splitext(name)[0]) if s.strip() != ""]
 	mergeNameArray = []
 	mergeNameArray.append(mna[0])
 	if len(mna) > 1:
@@ -916,18 +963,60 @@ def fixDuplicateName(firstGameRoms, secondGameRoms, sharedName):
 	global newGameRomDict
 	firstBestRoms, firstRegionNum, _ = getRomsInBestRegion(firstGameRoms)
 	secondBestRoms, secondRegionNum, _ = getRomsInBestRegion(secondGameRoms)
-	if firstRegionNum < secondRegionNum:
-		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
-		# print("Renamed "+sharedName+" to "+newSecondGameName)
-		return newSecondGameName, False
-	elif firstRegionNum > secondRegionNum:
+	if firstRegionNum != secondRegionNum:
 		newFirstGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[firstRegionNum]+")"
-		newGameRomDict[newFirstGameName] = newGameRomDict.pop(sharedName)
+		newSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
 		# print("Renamed "+sharedName+" to "+newFirstGameName)
-		return sharedName, False
-	else: # rare, but possible; such as DS demos that have both a DS Download Station and a Nintendo Channel version
-		tempSecondGameName = sharedName+" ("+list(mainConfig["Regions"].keys())[secondRegionNum]+")"
-		return tempSecondGameName, True
+		return newFirstGameName, newSecondGameName, True
+	else:
+		firstUniqueAtts, secondUniqueAtts = getUniqueAttributes(getBestRom(firstBestRoms)[0], getBestRom(secondBestRoms)[0])
+		if len(firstUniqueAtts) > 0 or len(secondUniqueAtts) > 0:
+			newFirstGameName = sharedName
+			for att in firstUniqueAtts:
+				newFirstGameName += " ("+att+")"
+			newSecondGameName = sharedName
+			for att in secondUniqueAtts:
+				newSecondGameName += " ("+att+")"
+			return newFirstGameName, newSecondGameName, True
+		else:
+			return None, None, False
+
+def getUniqueAttributes(firstRom, secondRom):
+	firstAtts = getAttributeSplit(firstRom)
+	firstAtts.pop(0)
+	secondAtts = getAttributeSplit(secondRom)
+	secondAtts.pop(0)
+	firstUniqueAtts = []
+	tempStarters = starters[:]
+	try:
+		tempStarters.remove("Proto") # Exerion
+	except:
+		pass
+	for att in firstAtts:
+		if att in secondAtts or att in sources:
+			continue
+		if att.startswith("v") and len(att) > 1 and att[1].isdigit():
+			continue
+		if att.startswith("b") and (len(att) == 1 or att[1].isdigit()):
+			continue
+		if not any(att.startswith(starter) for starter in tempStarters):
+			firstUniqueAtts.append(att)
+	secondUniqueAtts = []
+	for att in secondAtts:
+		if att in firstAtts or att in sources:
+			continue
+		if att.startswith("v") and len(att) > 1 and att[1].isdigit():
+			continue
+		if att.startswith("b") and (len(att) == 1 or att[1].isdigit()):
+			continue
+		if not any(att.startswith(starter) for starter in tempStarters):
+			secondUniqueAtts.append(att)
+	if ("Proto" in firstUniqueAtts + secondUniqueAtts) and (len(firstUniqueAtts) + len(secondUniqueAtts) > 1):
+		if "Proto" in firstUniqueAtts:
+			firstUniqueAtts.remove("Proto")
+		elif "Proto" in secondUniqueAtts:
+			secondUniqueAtts.remove("Proto")
+	return firstUniqueAtts, secondUniqueAtts
 
 def copyMainRomset(romsetCategory, isRedump):
 	global gameRomDict, progressBar
