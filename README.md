@@ -4,7 +4,7 @@ This is a program that uses [No-Intro](https://datomatic.no-intro.org/) and/or [
 
 <img src="https://github.com/GateGuy/RomOrganizer3/blob/main/screenshot%201.png?raw=true" width="500" height="300" />
 
-This is the successor to Rom Organizer and Rom Organizer Deluxe, including many features that aim to make the process of organizing your collection simple and fast:
+This is the successor to [Rom Organizer](https://github.com/GateGuy/RomOrganizer) and [Rom Organizer Deluxe](https://github.com/GateGuy/RomOrganizerDeluxe), including many features that aim to make the process of organizing your collection fast and simple:
 - Support for multiple romset types (Full, 1G1R, or 1G1R Primary)
 - Auto-renaming according to CRC hash (only for No-Intro)
 - Header-agnostic hashing; you can verify headered roms using a DAT file for unheadered roms
