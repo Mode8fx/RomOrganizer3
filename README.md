@@ -2,7 +2,7 @@
 
 This is a program that uses [No-Intro](https://datomatic.no-intro.org/) and/or [Redump](http://redump.org/) database files to create an organized copy of a local romset. The intent is to keep an unorganized collection of verified roms (plus unverified roms such as rom hacks) on one drive, while using this program to create curated sets for each of your individual devices with minimal work required for upkeep. You can create a profile for each device indicating what should/shouldn't be copied so you don't have to remember your preferences every time you update a device. Running time is also low in upkeep since files that already exist on the target drive aren't re-copied.
 
-<img src="https://github.com/GateGuy/RomOrganizer3/blob/master/screenshot.png?raw=true" width="" height="" />
+<img src="https://github.com/GateGuy/RomOrganizer3/blob/main/screenshot%201.png?raw=true" width="500" height="300" />
 
 This is the successor to Rom Organizer and Rom Organizer Deluxe, including many features that aim to make the process of organizing your collection simple and fast:
 - Support for multiple romset types (Full, 1G1R, or 1G1R Primary)
@@ -52,6 +52,9 @@ You can create a device profile that saves settings for that device's curated ro
 - Which regions are set as primary (any roms from these regions will be saved in the root directory instead of a separate region folder)
 
 ### Example Output
+
+<img src="https://github.com/GateGuy/RomOrganizer3/blob/main/screenshot%202.png?raw=true" width="300" height="360" /> <img src="https://github.com/GateGuy/RomOrganizer3/blob/main/screenshot%203.png?raw=true" width="237" height="360" />
+
 For example, your local romset containing:
 ```
 C:/Roms/Sega Genesis/My Game 1 (USA).zip
