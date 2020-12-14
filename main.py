@@ -2,7 +2,6 @@ from os import path, mkdir, listdir, remove, walk, rename, rmdir
 import re
 import xml.etree.ElementTree as ET
 import zipfile
-import numpy
 import shutil
 from pathlib import Path as plpath
 from math import ceil
@@ -503,6 +502,7 @@ def selectDeviceProfile():
 		return False
 
 def createDeviceProfile():
+	global deviceConfig
 	initScreen()
 	if not verifyMainRomFolder():
 		return
