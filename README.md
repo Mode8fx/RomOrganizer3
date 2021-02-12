@@ -70,21 +70,21 @@ C:/Rom Organizer 3/No-Intro Database/Sega Genesis.dat
 ```
 ... will be copied and sorted as:
 ```
-F:/Roms/Sega - Sega Genesis/[USA]/My Game 1/My Game 1 (USA).zip
-F:/Roms/Sega - Sega Genesis/[USA]/My Game 1/My Game 1 (USA) (Rev 1).zip
-F:/Roms/Sega - Sega Genesis/[USA]/My Game 1/My Game 1 (Europe).zip
-F:/Roms/Sega - Sega Genesis/[USA]/My Game 1/My Game 1 (Japan).zip
-F:/Roms/Sega - Sega Genesis/[Europe]/My Game 2/My Game 2 (Europe).zip
-F:/Roms/Sega - Sega Genesis/[Europe]/My Game 2/My Game 2 (Japan).zip
+F:/Roms/Sega Genesis/[USA]/My Game 1/My Game 1 (USA).zip
+F:/Roms/Sega Genesis/[USA]/My Game 1/My Game 1 (USA) (Rev 1).zip
+F:/Roms/Sega Genesis/[USA]/My Game 1/My Game 1 (Europe).zip
+F:/Roms/Sega Genesis/[USA]/My Game 1/My Game 1 (Japan).zip
+F:/Roms/Sega Genesis/[Europe]/My Game 2/My Game 2 (Europe).zip
+F:/Roms/Sega Genesis/[Europe]/My Game 2/My Game 2 (Japan).zip
 ```
 All versions of My Game 1 are stored in the [USA] folder since a USA version exists, while all versions of My Game 2 are stored in the [Europe] folder because a USA version does not exist, but a European version does. By default, USA roms are prioritized, followed by Europe, then other English-speaking regions (and any game with an English rom), then Japan, then everything else. Furthermore, if you set USA as a primary region, then these files will be copied and sorted as:
 ```
-F:/Roms/Sega - Sega Genesis/My Game 1/My Game 1 (USA).zip
-F:/Roms/Sega - Sega Genesis/My Game 1/My Game 1 (USA) (Rev 1).zip
-F:/Roms/Sega - Sega Genesis/My Game 1/My Game 1 (Europe).zip
-F:/Roms/Sega - Sega Genesis/My Game 1/My Game 1 (Japan).zip
-F:/Roms/Sega - Sega Genesis/[Europe]/My Game 2/My Game 2 (Europe).zip
-F:/Roms/Sega - Sega Genesis/[Europe]/My Game 2/My Game 2 (Japan).zip
+F:/Roms/Sega Genesis/My Game 1/My Game 1 (USA).zip
+F:/Roms/Sega Genesis/My Game 1/My Game 1 (USA) (Rev 1).zip
+F:/Roms/Sega Genesis/My Game 1/My Game 1 (Europe).zip
+F:/Roms/Sega Genesis/My Game 1/My Game 1 (Japan).zip
+F:/Roms/Sega Genesis/[Europe]/My Game 2/My Game 2 (Europe).zip
+F:/Roms/Sega Genesis/[Europe]/My Game 2/My Game 2 (Japan).zip
 ```
 You can define your own region settings in the settings.ini file.
 
