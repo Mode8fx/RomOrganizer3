@@ -1,6 +1,6 @@
 # Rom Organizer 3
 
-#### Notes
+#### Before You Download...
 A new, GUI-based version of this program is currently in development. It will be much easier to use, include a few new organization features, and fix one or two bugs I didn't originally catch (specifically, Rom Organizer 3 has a bug that occurs if you audit a romset that includes two copies of the same rom (the same _rom_, not the same game); this is an extremely rare situation, but sorry if you run into it!). I'll add a link to this new program once it's completed.
 
 #### What is This?
